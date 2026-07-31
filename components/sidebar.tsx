@@ -123,19 +123,21 @@ function Wordmark() {
         <svg
           aria-hidden
           viewBox="0 0 32 32"
-          className="size-4"
+          className="size-4.5"
           fill="none"
           stroke="#1c1204"
-          strokeWidth={3}
+          strokeWidth={2.5}
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="M6 26 26 6" />
-          <path d="M14 6h12v12" />
+          {/* pen nib */}
+          <path d="M16 4l8 8-6.5 14.5a2 2 0 0 1-3 .9L8.5 22 16 4z" />
+          <path d="M16 4 8.5 22" />
+          <circle cx="14.5" cy="19" r="1.6" fill="#1c1204" stroke="none" />
         </svg>
       </span>
       <span>
-        <span className="block text-[15px] font-semibold leading-tight tracking-tight">
+        <span className="font-display block text-[16px] font-semibold leading-tight">
           PostPilot
         </span>
         <span className="block text-[11px] leading-tight text-ink-muted">

@@ -80,7 +80,9 @@ export default function CreatorIpPage() {
         {/* Brand book */}
         <div className="flex flex-col gap-5">
           <Card title="Positioning">
-            <p className="text-sm leading-relaxed text-ink-2">{p.positioning}</p>
+            <p className="font-display text-[19px] leading-[30px] text-ink">
+              {p.positioning}
+            </p>
             <p className="mt-3 text-xs text-ink-muted">{p.audience}</p>
           </Card>
 

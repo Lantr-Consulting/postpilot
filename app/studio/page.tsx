@@ -9,6 +9,7 @@ import {
   CheckList,
   DraftBadge,
   IdeaBadge,
+  PLATFORM_EDGE,
   PlatformChip,
   SectionHeading,
 } from "@/components/ui";
@@ -125,7 +126,10 @@ export default function StudioPage() {
                 const blocked = d.checks.some((c) => !c.pass);
                 const cited = ATOMS.filter((a) => d.atomIds.includes(a.id));
                 return (
-                  <li key={d.id} className="rounded-xl bg-surface-2 p-4">
+                  <li
+                    key={d.id}
+                    className={`rounded-xl border-l-2 bg-surface-2 p-4 ${PLATFORM_EDGE[d.platform]}`}
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         <PlatformChip platform={d.platform} />

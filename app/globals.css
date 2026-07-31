@@ -44,6 +44,7 @@
   --color-critical: var(--critical);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
 }
 
 body {
@@ -108,6 +109,29 @@ select:focus-visible {
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Display voice — headings and the creator's own words */
+.font-display {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-variation-settings: "opsz" 40, "SOFT" 40, "WONK" 0;
+  letter-spacing: -0.015em;
+}
+
+/* Index card — how atoms and the daily insight sit on the desk: a ruled
+   top edge and faint paper lines. */
+.index-card {
+  position: relative;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 27px,
+      rgba(255, 244, 224, 0.045) 27px,
+      rgba(255, 244, 224, 0.045) 28px
+    ),
+    var(--surface-2);
+  border-top: 2px solid color-mix(in oklab, var(--accent) 55%, transparent);
 }
 
 /* Loading placeholder blocks */

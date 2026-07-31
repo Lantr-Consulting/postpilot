@@ -15,15 +15,16 @@ A Lantr sample project, built in the same order a student builds theirs.
 
 **Live:** https://postpilot-drab-seven.vercel.app
 
-## Status: Milestone 1 — First Ship
+## Status: Milestone 2 — Design pass
 
-All nine screens are live on typed mock data shaped like the real records
-(`lib/types.ts`, `lib/mock.ts` — a full fixture creator: profile, materials
-and mined atoms, a week of pipeline, logged results), so later milestones
-swap mocks for APIs without reshaping the UI. The fixture demonstrates the
-control model already: one sponsored draft is missing its "#ad" disclosure
-and the editorial engine's check rows are blocking it. Full design in
-[DESIGN.md](DESIGN.md).
+The desk has a voice now: Fraunces serif for headings and the creator's own
+words, Library atoms styled as ruled index cards, platform accent edges on
+draft variants, a pen-nib wordmark and favicon, warm amber tokens
+throughout — verified in the browser, not just the build. All nine screens
+still run on typed mock data shaped like the real records (`lib/types.ts`,
+`lib/mock.ts`); the fixture demonstrates the control model already: one
+sponsored draft is missing its "#ad" disclosure and the editorial engine's
+check rows are blocking it. Full design in [DESIGN.md](DESIGN.md).
 
 - **Today** — calendar strip, pipeline counts, streak, latest Growth Lead insight
 - **Studio** — niche radar → idea cards evidenced by trend + your own material → platform-tailored drafts → edit, approve, export
@@ -41,8 +42,8 @@ and the editorial engine's check rows are blocking it. Full design in
 |---|---|
 | 0. Design | This document set: scope, control model, data sources, plan ✅ |
 | 1. First Ship | Frontend on Vercel, all nine screens on typed mock data ✅ |
-| 2. Design pass | Writer's-desk personality, platform accent chips, atom badges, visual polish *(next)* |
-| 3. The Brain | Python backend on Railway; IP interpreter + grounded chat; niche radar goes live on real data |
+| 2. Design pass | Writer's-desk personality, platform accent chips, atom badges, visual polish ✅ |
+| 3. The Brain | Python backend on Railway; IP interpreter + grounded chat; niche radar goes live on real data *(next)* |
 | 4. Hands | Editorial engine (pure code, cited rules) + LangChain agent; material ingestion and idea → draft → export both live |
 | 5. Memory & accounts | Supabase database, sign-in, one creator per user |
 | 6. Growth Lead upgrade | Onboarding/Activate, versioned brand book, goals, repurposing, growth reviews, decline-reason lessons |

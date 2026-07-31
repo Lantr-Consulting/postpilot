@@ -148,14 +148,14 @@ export default function LibraryPage() {
           ) : (
             <ul className="grid gap-3 md:grid-cols-2">
               {atoms.map((a) => (
-                <li key={a.id} className="flex flex-col rounded-xl bg-surface-2 p-4">
+                <li key={a.id} className="index-card flex flex-col rounded-xl p-4">
                   <div className="flex items-center justify-between gap-2">
                     <AtomBadge kind={a.kind} />
                     <span className="text-[11px] text-ink-muted">
                       used {a.usedCount}×
                     </span>
                   </div>
-                  <p className="mt-2 flex-1 text-sm leading-relaxed text-ink-2">
+                  <p className="font-display mt-2 flex-1 text-[15px] leading-[28px] text-ink">
                     {a.text}
                   </p>
                   <p className="mt-3 text-[11px] text-ink-muted">

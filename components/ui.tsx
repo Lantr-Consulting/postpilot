@@ -180,8 +180,20 @@ export function SectionHeading({
 }) {
   return (
     <div className="mb-4">
-      <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-      {sub && <p className="mt-1 text-sm text-ink-2">{sub}</p>}
+      <h1 className="font-display text-[26px] font-semibold leading-tight">
+        {title}
+      </h1>
+      {sub && <p className="mt-1.5 text-sm text-ink-2">{sub}</p>}
     </div>
   );
 }
+
+// Platform accent edges for draft cards — the variant's platform reads at a
+// glance before any text does.
+export const PLATFORM_EDGE: Record<Platform, string> = {
+  x: "border-l-[#e7e9ea]/50",
+  linkedin: "border-l-[#0a66c2]",
+  instagram: "border-l-[#e1306c]",
+  bluesky: "border-l-[#0085ff]",
+  youtube: "border-l-[#ff0033]",
+};

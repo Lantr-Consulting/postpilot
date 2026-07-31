@@ -84,9 +84,13 @@ export default function TodayPage() {
         <Stat label="Posting streak" value={`${STREAK_DAYS}d`} hint="you post; we count" />
       </div>
 
-      {/* Growth Lead insight */}
+      {/* Growth Lead insight — pinned to the desk like an index card */}
       <Card title="From your Growth Lead">
-        <p className="text-sm leading-relaxed text-ink-2">{LATEST_INSIGHT}</p>
+        <div className="index-card rounded-xl px-4 pb-4 pt-3">
+          <p className="font-display text-[17px] leading-[28px] text-ink">
+            {LATEST_INSIGHT}
+          </p>
+        </div>
         <div className="mt-4 flex gap-2">
           <Link href="/studio" className="btn-primary px-4 py-2 text-sm">
             Open the Studio
