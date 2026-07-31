@@ -13,12 +13,14 @@ the strategy.
 
 A Lantr sample project, built in the same order a student builds theirs.
 
-## Status: Milestone 0 — Design
+## Status: Milestone 1 — First Ship
 
-The approved design is written before any code — scope, control model
-("the LLM drafts; `editorial.py` decides what ships" — and the agent never
-invents your life: every personal story in a draft traces to your profile or
-your Library), data sources, and the 10-milestone plan. Full design in
+All nine screens are live on typed mock data shaped like the real records
+(`lib/types.ts`, `lib/mock.ts` — a full fixture creator: profile, materials
+and mined atoms, a week of pipeline, logged results), so later milestones
+swap mocks for APIs without reshaping the UI. The fixture demonstrates the
+control model already: one sponsored draft is missing its "#ad" disclosure
+and the editorial engine's check rows are blocking it. Full design in
 [DESIGN.md](DESIGN.md).
 
 - **Today** — calendar strip, pipeline counts, streak, latest Growth Lead insight
@@ -36,8 +38,8 @@ your Library), data sources, and the 10-milestone plan. Full design in
 | Milestone | What ships |
 |---|---|
 | 0. Design | This document set: scope, control model, data sources, plan ✅ |
-| 1. First Ship | Frontend on Vercel, all nine screens on typed mock data *(next)* |
-| 2. Design pass | Writer's-desk personality, platform accent chips, atom badges, visual polish |
+| 1. First Ship | Frontend on Vercel, all nine screens on typed mock data ✅ |
+| 2. Design pass | Writer's-desk personality, platform accent chips, atom badges, visual polish *(next)* |
 | 3. The Brain | Python backend on Railway; IP interpreter + grounded chat; niche radar goes live on real data |
 | 4. Hands | Editorial engine (pure code, cited rules) + LangChain agent; material ingestion and idea → draft → export both live |
 | 5. Memory & accounts | Supabase database, sign-in, one creator per user |
@@ -55,4 +57,10 @@ one key) · Supabase (Postgres + auth). All free tier, no credit card.
 
 ## Run it
 
-Nothing to run yet — Milestone 1 ships the frontend.
+```bash
+npm install
+npm run dev
+```
+
+Then open http://localhost:3000. Everything runs on sample data — the
+backend arrives at Milestone 3.
