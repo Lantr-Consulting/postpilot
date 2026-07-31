@@ -84,7 +84,7 @@ export default function StudioPage() {
                           className={`mt-px inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 font-semibold ${
                             e.atomId
                               ? "bg-atom-story/15 text-atom-story"
-                              : "bg-white/10 text-ink-2"
+                              : "bg-wash-2 text-ink-2"
                           }`}
                         >
                           {e.atomId ? "Your material" : e.source}
@@ -94,7 +94,7 @@ export default function StudioPage() {
                     ))}
                   </ul>
                   {idea.declineReason && (
-                    <p className="mt-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-ink-muted">
+                    <p className="mt-2 rounded-lg bg-wash px-3 py-2 text-xs text-ink-muted">
                       Standing lesson: {idea.declineReason}
                     </p>
                   )}
@@ -237,7 +237,7 @@ export default function StudioPage() {
             <ul className="flex flex-col gap-3">
               {TRENDS.map((t) => (
                 <li key={t.id} className="rounded-xl bg-surface-2 p-3">
-                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                  <span className="rounded-full bg-wash-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
                     {SOURCE_LABEL[t.source]}
                   </span>
                   <p className="mt-1.5 text-xs leading-relaxed text-ink-2">

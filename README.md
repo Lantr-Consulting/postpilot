@@ -19,8 +19,10 @@ A Lantr sample project, built in the same order a student builds theirs.
 
 The desk has a voice now: Fraunces serif for headings and the creator's own
 words, Library atoms styled as ruled index cards, platform accent edges on
-draft variants, a pen-nib wordmark and favicon, warm amber tokens
-throughout — verified in the browser, not just the build. All nine screens
+draft variants, a pen-nib wordmark and favicon — and an **ink & paper**
+palette in two full token sets: fountain-pen ink on warm paper (light) and
+on a cool charcoal desk (dark), with a persisted sun/moon toggle in the top
+bar. Verified in the browser, not just the build. All nine screens
 still run on typed mock data shaped like the real records (`lib/types.ts`,
 `lib/mock.ts`); the fixture demonstrates the control model already: one
 sponsored draft is missing its "#ad" disclosure and the editorial engine's

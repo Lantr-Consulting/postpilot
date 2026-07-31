@@ -6,7 +6,7 @@ import { useToast } from "@/components/toast";
 import { Card, SectionHeading } from "@/components/ui";
 
 const ARC_STYLES: Record<string, string> = {
-  seed: "bg-white/10 text-ink-muted",
+  seed: "bg-wash-2 text-ink-muted",
   running: "bg-accent/15 text-accent",
   resolved: "bg-good/10 text-good",
 };
@@ -52,7 +52,7 @@ export default function CreatorIpPage() {
           <Card title="Status">
             <div className="flex items-center justify-between">
               <span className="text-sm text-ink-2">Profile version</span>
-              <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold">
+              <span className="rounded-full bg-wash-2 px-2.5 py-0.5 text-xs font-semibold">
                 v{p.version}
               </span>
             </div>

@@ -1,7 +1,71 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CREATOR, TODAY } from "@/lib/mock";
 import { fmtDate } from "@/lib/format";
+
+// Sun/moon toggle. Dark is the default set; "light" is stored in
+// localStorage and applied pre-paint by the inline script in layout.tsx.
+function ThemeToggle() {
+  const [theme, setTheme] = useState<"dark" | "light" | null>(null);
+
+  useEffect(() => {
+    setTheme(
+      document.documentElement.dataset.theme === "light" ? "light" : "dark"
+    );
+  }, []);
+
+  function toggle() {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    if (next === "light") {
+      document.documentElement.dataset.theme = "light";
+    } else {
+      delete document.documentElement.dataset.theme;
+    }
+    try {
+      localStorage.setItem("pp-theme", next);
+    } catch {}
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+      title={theme === "light" ? "Dark mode" : "Light mode"}
+      className="btn-ghost size-8 !rounded-full"
+    >
+      {theme === null ? null : theme === "light" ? (
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="size-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.75}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+        </svg>
+      ) : (
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="size-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.75}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </svg>
+      )}
+    </button>
+  );
+}
 
 export function TopBar() {
   return (
@@ -26,9 +90,12 @@ export function TopBar() {
         </span>
         <span className="text-ink-muted">· {fmtDate(TODAY)}</span>
       </div>
-      <span className="rounded-full border border-hairline px-2.5 py-1 text-[11px] font-medium text-ink-muted">
-        Sample data
-      </span>
+      <div className="flex items-center gap-2">
+        <span className="rounded-full border border-hairline px-2.5 py-1 text-[11px] font-medium text-ink-muted">
+          Sample data
+        </span>
+        <ThemeToggle />
+      </div>
     </header>
   );
 }

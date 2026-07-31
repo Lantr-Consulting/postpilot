@@ -38,9 +38,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      // data-theme is set pre-paint from localStorage; the server can't know it.
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="flex h-screen overflow-hidden">
+        {/* Apply the saved theme before first paint to avoid a flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{if(localStorage.getItem("pp-theme")==="light")document.documentElement.dataset.theme="light"}catch(e){}',
+          }}
+        />
         <ToastProvider>
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col">

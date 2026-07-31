@@ -35,7 +35,7 @@ export default function TodayPage() {
                 className={`flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center transition-colors ${
                   isToday
                     ? "bg-accent/15 text-accent"
-                    : "hover:bg-white/5"
+                    : "hover:bg-wash"
                 }`}
               >
                 <span className="text-[11px] uppercase text-ink-muted">{day}</span>

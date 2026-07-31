@@ -125,7 +125,7 @@ function Wordmark() {
           viewBox="0 0 32 32"
           className="size-4.5"
           fill="none"
-          stroke="#1c1204"
+          stroke="var(--accent-ink)"
           strokeWidth={2.5}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -133,7 +133,7 @@ function Wordmark() {
           {/* pen nib */}
           <path d="M16 4l8 8-6.5 14.5a2 2 0 0 1-3 .9L8.5 22 16 4z" />
           <path d="M16 4 8.5 22" />
-          <circle cx="14.5" cy="19" r="1.6" fill="#1c1204" stroke="none" />
+          <circle cx="14.5" cy="19" r="1.6" fill="var(--accent-ink)" stroke="none" />
         </svg>
       </span>
       <span>
@@ -162,8 +162,8 @@ export function Sidebar() {
               href={item.href}
               className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
                 active
-                  ? "bg-white/10 font-medium text-ink"
-                  : "text-ink-2 hover:bg-white/5 hover:text-ink"
+                  ? "bg-wash-2 font-medium text-ink"
+                  : "text-ink-2 hover:bg-wash hover:text-ink"
               }`}
             >
               <span className={active ? "text-accent" : "text-ink-muted"}>
@@ -202,7 +202,7 @@ export function MobileNav() {
             key={item.href}
             href={item.href}
             className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm ${
-              active ? "bg-white/10 font-medium text-ink" : "text-ink-2"
+              active ? "bg-wash-2 font-medium text-ink" : "text-ink-2"
             }`}
           >
             {item.label}

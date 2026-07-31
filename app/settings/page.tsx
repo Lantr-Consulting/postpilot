@@ -148,7 +148,7 @@ export default function SettingsPage() {
                   toast(paused ? "success" : "info", paused ? "Resumed." : "Paused — all agent activity stops.");
                 }}
                 className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  paused ? "bg-critical" : "bg-white/15"
+                  paused ? "bg-critical" : "bg-wash-2"
                 }`}
               >
                 <span

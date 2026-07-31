@@ -75,8 +75,8 @@ export function Stat({
 const IDEA_STYLES: Record<IdeaStatus, { label: string; cls: string }> = {
   proposed: { label: "Awaiting your call", cls: "bg-accent/15 text-accent" },
   accepted: { label: "Accepted", cls: "bg-good/10 text-good" },
-  declined: { label: "Declined", cls: "bg-white/10 text-ink-2" },
-  superseded: { label: "Superseded", cls: "bg-white/10 text-ink-muted" },
+  declined: { label: "Declined", cls: "bg-wash-2 text-ink-2" },
+  superseded: { label: "Superseded", cls: "bg-wash-2 text-ink-muted" },
 };
 
 export function IdeaBadge({ status }: { status: IdeaStatus }) {
@@ -94,8 +94,8 @@ const DRAFT_STYLES: Record<DraftStatus, { label: string; cls: string }> = {
   draft: { label: "Needs review", cls: "bg-accent/15 text-accent" },
   approved: { label: "Approved", cls: "bg-good/10 text-good" },
   exported: { label: "Exported", cls: "bg-atom-stat/15 text-atom-stat" },
-  posted: { label: "Posted", cls: "bg-white/10 text-ink-2" },
-  declined: { label: "Declined", cls: "bg-white/10 text-ink-muted" },
+  posted: { label: "Posted", cls: "bg-wash-2 text-ink-2" },
+  declined: { label: "Declined", cls: "bg-wash-2 text-ink-muted" },
 };
 
 export function DraftBadge({ status }: { status: DraftStatus }) {
@@ -110,11 +110,11 @@ export function DraftBadge({ status }: { status: DraftStatus }) {
 }
 
 const PLATFORM_STYLES: Record<Platform, string> = {
-  x: "bg-white/10 text-ink",
-  linkedin: "bg-[#0a66c2]/20 text-[#6ab4f7]",
-  instagram: "bg-[#e1306c]/15 text-[#f27ba4]",
-  bluesky: "bg-[#0085ff]/15 text-[#57b8ff]",
-  youtube: "bg-[#ff0033]/15 text-[#ff7a8a]",
+  x: "bg-wash-2 text-(--pf-x)",
+  linkedin: "bg-[#0a66c2]/15 text-(--pf-li)",
+  instagram: "bg-[#e1306c]/12 text-(--pf-ig)",
+  bluesky: "bg-[#0085ff]/12 text-(--pf-bs)",
+  youtube: "bg-[#ff0033]/10 text-(--pf-yt)",
 };
 
 export function PlatformChip({ platform }: { platform: Platform }) {
@@ -191,7 +191,7 @@ export function SectionHeading({
 // Platform accent edges for draft cards — the variant's platform reads at a
 // glance before any text does.
 export const PLATFORM_EDGE: Record<Platform, string> = {
-  x: "border-l-[#e7e9ea]/50",
+  x: "border-l-(--pf-x-edge)",
   linkedin: "border-l-[#0a66c2]",
   instagram: "border-l-[#e1306c]",
   bluesky: "border-l-[#0085ff]",

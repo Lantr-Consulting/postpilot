@@ -162,8 +162,8 @@ export default function GrowthLeadPage() {
                     onClick={() => openThread(t.id)}
                     className={`w-full rounded-lg px-3 py-2 text-left text-xs transition-colors ${
                       t.id === threadId
-                        ? "bg-white/10 font-medium text-ink"
-                        : "text-ink-2 hover:bg-white/5"
+                        ? "bg-wash-2 font-medium text-ink"
+                        : "text-ink-2 hover:bg-wash"
                     }`}
                   >
                     <span className="block truncate">{t.title}</span>
