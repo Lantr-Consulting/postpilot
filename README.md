@@ -13,6 +13,8 @@ the strategy.
 
 A Lantr sample project, built in the same order a student builds theirs.
 
+**Live:** https://postpilot-drab-seven.vercel.app
+
 ## Status: Milestone 1 — First Ship
 
 All nine screens are live on typed mock data shaped like the real records
