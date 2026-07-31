@@ -15,18 +15,19 @@ A Lantr sample project, built in the same order a student builds theirs.
 
 **Live:** https://postpilot-drab-seven.vercel.app
 
-## Status: Milestone 2 — Design pass
+## Status: Milestone 3 — The Brain
 
-The desk has a voice now: Fraunces serif for headings and the creator's own
-words, Library atoms styled as ruled index cards, platform accent edges on
-draft variants, a pen-nib wordmark and favicon — and an **ink & paper**
-palette in two full token sets: fountain-pen ink on warm paper (light) and
-on a cool charcoal desk (dark), with a persisted sun/moon toggle in the top
-bar. Verified in the browser, not just the build. All nine screens
-still run on typed mock data shaped like the real records (`lib/types.ts`,
-`lib/mock.ts`); the fixture demonstrates the control model already: one
-sponsored draft is missing its "#ad" disclosure and the editorial engine's
-check rows are blocking it. Full design in [DESIGN.md](DESIGN.md).
+The backend is real: Python FastAPI on Railway with the two LLM endpoints —
+`/interpret-profile` (your story in plain English → the structured,
+validated brand book; the model proposes, `_validate_profile` disposes) and
+`/chat` (a Growth Lead grounded in your IP profile, with the grounding rule
+that survived live testing: it will not invent your clients or stories,
+even with placeholders — it asks for the real one). **First real data ships
+here:** the Studio niche radar is live on keyless sources (Bluesky search,
+Google News RSS, Google Trends RSS), each degrading gracefully to sample
+data. Two sources taught us the lesson mid-build: Google's old trends API
+is already dead, and Reddit now 403s datacenter IPs — free API surfaces
+shrink, and the radar shrugs. Full design in [DESIGN.md](DESIGN.md).
 
 - **Today** — calendar strip, pipeline counts, streak, latest Growth Lead insight
 - **Studio** — niche radar → idea cards evidenced by trend + your own material → platform-tailored drafts → edit, approve, export
@@ -45,8 +46,8 @@ check rows are blocking it. Full design in [DESIGN.md](DESIGN.md).
 | 0. Design | This document set: scope, control model, data sources, plan ✅ |
 | 1. First Ship | Frontend on Vercel, all nine screens on typed mock data ✅ |
 | 2. Design pass | Writer's-desk personality, platform accent chips, atom badges, visual polish ✅ |
-| 3. The Brain | Python backend on Railway; IP interpreter + grounded chat; niche radar goes live on real data *(next)* |
-| 4. Hands | Editorial engine (pure code, cited rules) + LangChain agent; material ingestion and idea → draft → export both live |
+| 3. The Brain | Python backend on Railway; IP interpreter + grounded chat; niche radar goes live on real data ✅ |
+| 4. Hands | Editorial engine (pure code, cited rules) + LangChain agent; material ingestion and idea → draft → export both live *(next)* |
 | 5. Memory & accounts | Supabase database, sign-in, one creator per user |
 | 6. Growth Lead upgrade | Onboarding/Activate, versioned brand book, goals, repurposing, growth reviews, decline-reason lessons |
 | 7. Workspace | Async runs (research/ingestion/review), threads, staleness supersession |
@@ -67,5 +68,14 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:3000. Everything runs on sample data — the
-backend arrives at Milestone 3.
+Then open http://localhost:3000. The frontend falls back to sample data
+without the backend. To run the brain locally:
+
+```bash
+cd backend
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+echo "DEEPSEEK_API_KEY=sk-..." > .env   # any OpenAI-compatible key works
+.venv/bin/uvicorn main:app --port 8020
+```
+
+Backend in production: https://postpilot-backend-production-c081.up.railway.app

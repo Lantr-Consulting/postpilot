@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { ATOMS, DRAFTS, IDEAS, TRENDS } from "@/lib/mock";
-import type { Draft, Idea, TrendSource } from "@/lib/types";
+import { useEffect, useState } from "react";
+import { getTrends } from "@/lib/api";
+import { ATOMS, CREATOR, DRAFTS, IDEAS, TRENDS } from "@/lib/mock";
+import type { Draft, Idea, TrendItem, TrendSource } from "@/lib/types";
 import { useToast } from "@/components/toast";
 import {
   Card,
@@ -27,6 +28,20 @@ export default function StudioPage() {
   const [ideas, setIdeas] = useState<Idea[]>(IDEAS);
   const [drafts, setDrafts] = useState<Draft[]>(DRAFTS);
   const [editing, setEditing] = useState<string | null>(null);
+
+  // The radar goes live at M3: real niche signals, mock rail as fallback.
+  const [trends, setTrends] = useState<TrendItem[]>(TRENDS);
+  const [radarLive, setRadarLive] = useState(false);
+  useEffect(() => {
+    getTrends(CREATOR.niche)
+      .then((items) => {
+        if (items.length) {
+          setTrends(items);
+          setRadarLive(true);
+        }
+      })
+      .catch(() => {}); // offline → the M1 sample rail stands
+  }, []);
 
   function decideIdea(id: string, status: "accepted" | "declined") {
     if (status === "declined") {
@@ -233,15 +248,35 @@ export default function StudioPage() {
 
         {/* Niche radar rail */}
         <div className="flex flex-col gap-5">
-          <Card title="Niche radar" action={<span className="text-xs text-ink-muted">live at M3</span>}>
+          <Card
+            title="Niche radar"
+            action={
+              <span
+                className={`text-xs font-medium ${radarLive ? "text-good" : "text-ink-muted"}`}
+              >
+                {radarLive ? "live" : "sample"}
+              </span>
+            }
+          >
             <ul className="flex flex-col gap-3">
-              {TRENDS.map((t) => (
+              {trends.map((t) => (
                 <li key={t.id} className="rounded-xl bg-surface-2 p-3">
                   <span className="rounded-full bg-wash-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
                     {SOURCE_LABEL[t.source]}
                   </span>
                   <p className="mt-1.5 text-xs leading-relaxed text-ink-2">
-                    {t.title}
+                    {t.url ? (
+                      <a
+                        href={t.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hover:text-ink hover:underline"
+                      >
+                        {t.title}
+                      </a>
+                    ) : (
+                      t.title
+                    )}
                   </p>
                   <p className="mt-1 text-[11px] text-ink-muted">{t.datum}</p>
                 </li>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { chat as apiChat } from "@/lib/api";
 import { CREATOR, REVIEW, THREADS } from "@/lib/mock";
 import type { ChatMessage } from "@/lib/types";
 import { fmtDate, fmtTime } from "@/lib/format";
@@ -21,21 +22,35 @@ export default function GrowthLeadPage() {
     setMessages(THREADS.find((t) => t.id === id)!.messages);
   }
 
-  function send() {
+  const [thinking, setThinking] = useState(false);
+  const historyRef = useRef<ChatMessage[]>(THREADS[0].messages);
+  historyRef.current = messages;
+
+  async function send() {
     const text = input.trim();
-    if (!text) return;
+    if (!text || thinking) return;
     setInput("");
     const now = new Date().toISOString();
-    setMessages((ms) => [
-      ...ms,
-      { id: `u-${now}`, role: "user", text, at: now },
-      {
-        id: `a-${now}`,
-        role: "assistant",
-        text: "This is sample data — the Growth Lead comes online at Milestone 3, grounded in your IP profile, your Library, and your logged results.",
-        at: now,
-      },
-    ]);
+    setMessages((ms) => [...ms, { id: `u-${now}`, role: "user", text, at: now }]);
+    setThinking(true);
+    let reply: string;
+    try {
+      const res = await apiChat({
+        message: text,
+        history: historyRef.current
+          .slice(-10)
+          .map((m) => ({ role: m.role, content: m.text })),
+        profile: CREATOR.ipProfile,
+      });
+      reply = res.reply;
+    } catch {
+      // Offline → the M1 sample experience stands.
+      reply =
+        "I'm offline right now, so this is sample data. When the backend is reachable I answer grounded in your IP profile — and never invent your stories.";
+    }
+    setThinking(false);
+    const at = new Date().toISOString();
+    setMessages((ms) => [...ms, { id: `a-${at}`, role: "assistant", text: reply, at }]);
   }
 
   function decideMove(id: string, status: "accepted" | "declined") {
@@ -83,6 +98,11 @@ export default function GrowthLeadPage() {
                 </p>
               </div>
             ))}
+            {thinking && (
+              <div className="max-w-[85%] animate-[msg-in_.15s_ease-out] self-start rounded-2xl bg-surface-2 px-4 py-2.5 text-sm text-ink-muted">
+                Thinking…
+              </div>
+            )}
           </div>
           <div className="mt-3 flex gap-2 border-t border-hairline pt-3">
             <input

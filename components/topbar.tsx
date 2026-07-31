@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CREATOR, TODAY } from "@/lib/mock";
 import { fmtDate } from "@/lib/format";
+import { useLive } from "@/lib/use-live";
 
 // Sun/moon toggle. Dark is the default set; "light" is stored in
 // localStorage and applied pre-paint by the inline script in layout.tsx.
@@ -68,6 +69,7 @@ function ThemeToggle() {
 }
 
 export function TopBar() {
+  const { live, checking } = useLive();
   return (
     <header className="flex items-center justify-between gap-3 border-b border-hairline bg-page px-5 py-3">
       <div className="flex items-center gap-2 text-sm text-ink-2">
@@ -91,8 +93,14 @@ export function TopBar() {
         <span className="text-ink-muted">· {fmtDate(TODAY)}</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="rounded-full border border-hairline px-2.5 py-1 text-[11px] font-medium text-ink-muted">
-          Sample data
+        <span
+          className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+            live
+              ? "bg-good/10 text-good"
+              : "border border-hairline text-ink-muted"
+          }`}
+        >
+          {checking ? "…" : live ? "Live" : "Sample data"}
         </span>
         <ThemeToggle />
       </div>

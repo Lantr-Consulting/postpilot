@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
+import { interpretProfile } from "@/lib/api";
 import { CREATOR } from "@/lib/mock";
+import type { IpProfile } from "@/lib/types";
 import { fmtDate } from "@/lib/format";
 import { useToast } from "@/components/toast";
 import { Card, SectionHeading } from "@/components/ui";
@@ -13,7 +16,32 @@ const ARC_STYLES: Record<string, string> = {
 
 export default function CreatorIpPage() {
   const toast = useToast();
-  const p = CREATOR.ipProfile;
+  // The interpreted brand book is client state until Supabase (M5).
+  const [profile, setProfile] = useState<IpProfile>(CREATOR.ipProfile);
+  const [story, setStory] = useState(
+    "I'm a physical therapist turned online strength coach. I want to be the person people think of for evidence-based minimalist training — three good hours a week…"
+  );
+  const [interpreting, setInterpreting] = useState(false);
+  const p = profile;
+
+  async function interpret() {
+    if (interpreting || !story.trim()) return;
+    setInterpreting(true);
+    try {
+      const { profile: fresh } = await interpretProfile(story);
+      setProfile((old) => ({
+        ...fresh,
+        // Keep goals if the model found none — a thin story shouldn't wipe them.
+        goals: fresh.goals.length ? fresh.goals : old.goals,
+        version: old.version + 1,
+        updatedAt: new Date().toISOString().slice(0, 10),
+      }));
+      toast("success", "Interpreted — review the brand book, then Activate.");
+    } catch {
+      toast("info", "Backend offline — this stays sample data for now.");
+    }
+    setInterpreting(false);
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -33,19 +61,16 @@ export default function CreatorIpPage() {
             </p>
             <textarea
               rows={7}
-              defaultValue="I'm a physical therapist turned online strength coach. I want to be the person people think of for evidence-based minimalist training — three good hours a week…"
+              value={story}
+              onChange={(e) => setStory(e.target.value)}
               className="mt-3 w-full rounded-lg border border-hairline bg-page p-3 text-sm text-ink"
             />
             <button
-              onClick={() =>
-                toast(
-                  "success",
-                  "Interpreted — review the updated brand book, then Activate. (Sample data)"
-                )
-              }
+              onClick={interpret}
+              disabled={interpreting}
               className="btn-primary mt-3 w-full px-3.5 py-2 text-sm"
             >
-              Interpret my story
+              {interpreting ? "Interpreting…" : "Interpret my story"}
             </button>
           </Card>
 
@@ -141,9 +166,11 @@ export default function CreatorIpPage() {
                 </ul>
               </div>
             </div>
-            <p className="mt-3 text-xs text-ink-muted">
-              Catchphrases: {p.voice.catchphrases.map((c) => `“${c}”`).join(" · ")}
-            </p>
+            {p.voice.catchphrases.length > 0 && (
+              <p className="mt-3 text-xs text-ink-muted">
+                Catchphrases: {p.voice.catchphrases.map((c) => `“${c}”`).join(" · ")}
+              </p>
+            )}
           </Card>
         </div>
       </div>
