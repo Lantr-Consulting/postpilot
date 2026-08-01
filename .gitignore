@@ -16,6 +16,9 @@ backend/__pycache__/
 __pycache__/
 *.pyc
 
+# milestone 4 local workspace store (Supabase replaces it at M5)
+backend/workspace.json
+
 # misc
 .DS_Store
 *.tsbuildinfo

@@ -15,19 +15,22 @@ A Lantr sample project, built in the same order a student builds theirs.
 
 **Live:** https://postpilot-drab-seven.vercel.app
 
-## Status: Milestone 3 — The Brain
+## Status: Milestone 4 — Hands
 
-The backend is real: Python FastAPI on Railway with the two LLM endpoints —
-`/interpret-profile` (your story in plain English → the structured,
-validated brand book; the model proposes, `_validate_profile` disposes) and
-`/chat` (a Growth Lead grounded in your IP profile, with the grounding rule
-that survived live testing: it will not invent your clients or stories,
-even with placeholders — it asks for the real one). **First real data ships
-here:** the Studio niche radar is live on keyless sources (Bluesky search,
-Google News RSS, Google Trends RSS), each degrading gracefully to sample
-data. Two sources taught us the lesson mid-build: Google's old trends API
-is already dead, and Reddit now 403s datacenter IPs — free API surfaces
-shrink, and the radar shrugs. Full design in [DESIGN.md](DESIGN.md).
+Both agentic pipelines are live. **Ingestion:** paste a transcript or brain
+dump and `agent.mine_material` turns it into tagged Library atoms — only
+what's genuinely in the text, never embellished. **Generation:** Run
+research and a LangChain tool-calling agent scans your niche (Bluesky,
+news, Reddit, Trends) and your Library, returns ideas with dual evidence
+(the outside signal + your own atom), and accepting one drafts
+platform-tailored variants. Every draft passes through `editorial.py` —
+pure code, every rule cited (X's 280 chars, 16 CFR 255, your banned-phrase
+list, difflib duplicate distance, atom citations that must resolve),
+unit-tested in `test_editorial.py` (11 tests). Approve re-runs the engine
+on your final edited text; a failing check is a hard 409 veto. The lesson
+that found us: `pip` silently upgraded `openai` under LangChain locally
+while Railway's resolver refused — pin what you actually run. Full design
+in [DESIGN.md](DESIGN.md).
 
 - **Today** — calendar strip, pipeline counts, streak, latest Growth Lead insight
 - **Studio** — niche radar → idea cards evidenced by trend + your own material → platform-tailored drafts → edit, approve, export
@@ -47,8 +50,8 @@ shrink, and the radar shrugs. Full design in [DESIGN.md](DESIGN.md).
 | 1. First Ship | Frontend on Vercel, all nine screens on typed mock data ✅ |
 | 2. Design pass | Writer's-desk personality, platform accent chips, atom badges, visual polish ✅ |
 | 3. The Brain | Python backend on Railway; IP interpreter + grounded chat; niche radar goes live on real data ✅ |
-| 4. Hands | Editorial engine (pure code, cited rules) + LangChain agent; material ingestion and idea → draft → export both live *(next)* |
-| 5. Memory & accounts | Supabase database, sign-in, one creator per user |
+| 4. Hands | Editorial engine (pure code, cited rules) + LangChain agent; material ingestion and idea → draft → export both live ✅ |
+| 5. Memory & accounts | Supabase database, sign-in, one creator per user *(next)* |
 | 6. Growth Lead upgrade | Onboarding/Activate, versioned brand book, goals, repurposing, growth reviews, decline-reason lessons |
 | 7. Workspace | Async runs (research/ingestion/review), threads, staleness supersession |
 | 8. Campaigns | Scheduler with cross-worker claim, scheduled weekly reviews |

@@ -2,7 +2,15 @@
 // callers catch and fall back to sample data, so the app works with no
 // network at all (the Milestone 1 experience is the fallback).
 
-import type { IpProfile, TrendItem } from "./types";
+import type {
+  Atom,
+  Draft,
+  Idea,
+  IpProfile,
+  Material,
+  RuleCheck,
+  TrendItem,
+} from "./types";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8020";
 
@@ -61,4 +69,91 @@ export function chat(args: {
   profile?: IpProfile;
 }): Promise<{ reply: string }> {
   return req("/chat", { method: "POST", body: JSON.stringify(args) });
+}
+
+// ---------- The workspace (Milestone 4: server file store; M5: Supabase) ----------
+
+export interface Workspace {
+  materials: Material[];
+  atoms: Atom[];
+  ideas: Idea[];
+  drafts: Draft[];
+}
+
+export function getWorkspace(): Promise<Workspace> {
+  return req("/workspace");
+}
+
+export function addMaterial(args: {
+  title: string;
+  kind: string;
+  text: string;
+}): Promise<Material> {
+  return req("/materials", { method: "POST", body: JSON.stringify(args) });
+}
+
+export function ingestMaterial(
+  id: string,
+  profile: IpProfile
+): Promise<{ material: Material; atoms: Atom[] }> {
+  return req(`/materials/${id}/ingest`, {
+    method: "POST",
+    body: JSON.stringify({ profile }),
+  });
+}
+
+export function runResearch(profile: object): Promise<{ ideas: Idea[] }> {
+  return req("/research", { method: "POST", body: JSON.stringify({ profile }) });
+}
+
+export function acceptIdea(
+  id: string,
+  args: { profile: IpProfile; rules: object; platforms: string[] }
+): Promise<{ drafts: Draft[] }> {
+  return req(`/ideas/${id}/accept`, { method: "POST", body: JSON.stringify(args) });
+}
+
+export function declineIdea(id: string, reason: string): Promise<Idea> {
+  return req(`/ideas/${id}/decline`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function editDraft(id: string, text: string, rules: object): Promise<Draft> {
+  return req(`/drafts/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ text, rules }),
+  });
+}
+
+// Approve re-checks the FINAL text server-side; 409 means the engine
+// vetoed — the error carries the fresh check rows.
+export async function approveDraft(
+  id: string,
+  text: string,
+  rules: object
+): Promise<{ draft: Draft | null; blockedChecks: RuleCheck[] | null }> {
+  const res = await fetch(`${API}/drafts/${id}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, rules }),
+  });
+  const body = await res.json();
+  if (res.status === 409 && body.detail?.checks) {
+    return { draft: null, blockedChecks: body.detail.checks as RuleCheck[] };
+  }
+  if (!res.ok) throw new ApiError(res.status, body.detail ?? res.statusText);
+  return { draft: body as Draft, blockedChecks: null };
+}
+
+export function declineDraft(id: string, reason: string): Promise<Draft> {
+  return req(`/drafts/${id}/decline`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function exportDraft(id: string): Promise<Draft> {
+  return req(`/drafts/${id}/export`, { method: "POST" });
 }

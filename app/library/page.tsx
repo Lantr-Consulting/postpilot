@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ATOMS, MATERIALS } from "@/lib/mock";
+import { addMaterial, ingestMaterial } from "@/lib/api";
+import { useWorkspace } from "@/lib/use-workspace";
+import { ATOMS, CREATOR, MATERIALS } from "@/lib/mock";
 import { fmtDate } from "@/lib/format";
 import { useToast } from "@/components/toast";
 import { AtomBadge, Card, SectionHeading } from "@/components/ui";
@@ -16,18 +18,54 @@ const KIND_LABEL: Record<string, string> = {
 
 export default function LibraryPage() {
   const toast = useToast();
+  const { ws, live, refresh } = useWorkspace();
+
+  const materials = live && ws ? ws.materials : MATERIALS;
+  const allAtoms = live && ws ? ws.atoms : ATOMS;
+
   const [query, setQuery] = useState("");
   const [pasting, setPasting] = useState(false);
+  const [title, setTitle] = useState("");
+  const [kind, setKind] = useState("notes");
+  const [text, setText] = useState("");
+  const [mining, setMining] = useState(false);
 
   const q = query.trim().toLowerCase();
   const atoms = q
-    ? ATOMS.filter(
+    ? allAtoms.filter(
         (a) =>
           a.text.toLowerCase().includes(q) ||
           a.pillars.some((p) => p.toLowerCase().includes(q)) ||
           a.kind.includes(q)
       )
-    : ATOMS;
+    : allAtoms;
+
+  async function saveMaterial() {
+    if (!text.trim()) return;
+    if (!live) {
+      setPasting(false);
+      toast("info", "Backend offline — mining needs the brain. (Sample data)");
+      return;
+    }
+    setMining(true);
+    try {
+      const mat = await addMaterial({
+        title: title.trim() || "Untitled material",
+        kind,
+        text,
+      });
+      await refresh(); // material appears as "uploaded" right away
+      const { atoms: mined } = await ingestMaterial(mat.id, CREATOR.ipProfile);
+      await refresh();
+      toast("success", `Mined ${mined.length} atoms from “${mat.title}”.`);
+      setPasting(false);
+      setTitle("");
+      setText("");
+    } catch {
+      toast("error", "Mining failed — try again.");
+    }
+    setMining(false);
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -42,26 +80,41 @@ export default function LibraryPage() {
           <Card title="Add material">
             {pasting ? (
               <div className="flex flex-col gap-2">
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Title (e.g. Podcast ep. 12 transcript)"
+                  className="w-full rounded-lg border border-hairline bg-page px-3 py-2 text-sm text-ink placeholder:text-ink-muted"
+                />
+                <select
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value)}
+                  className="w-full rounded-lg border border-hairline bg-page px-3 py-2 text-sm text-ink"
+                >
+                  <option value="transcript">Transcript</option>
+                  <option value="notes">Notes / brain dump</option>
+                  <option value="post">Past post</option>
+                  <option value="newsletter">Newsletter</option>
+                  <option value="other">Other</option>
+                </select>
                 <textarea
                   rows={6}
-                  placeholder="Paste a transcript, old post, newsletter, or brain dump…"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Paste the raw text…"
                   className="w-full rounded-lg border border-hairline bg-page p-3 text-sm text-ink placeholder:text-ink-muted"
                 />
                 <div className="flex gap-2">
                   <button
-                    onClick={() => {
-                      setPasting(false);
-                      toast(
-                        "success",
-                        "Material saved — an ingestion run mines it into atoms. (Sample data)"
-                      );
-                    }}
+                    onClick={saveMaterial}
+                    disabled={mining || !text.trim()}
                     className="btn-primary px-3.5 py-1.5 text-xs"
                   >
-                    Save &amp; mine it
+                    {mining ? "Mining atoms…" : "Save & mine it"}
                   </button>
                   <button
                     onClick={() => setPasting(false)}
+                    disabled={mining}
                     className="btn-ghost px-3.5 py-1.5 text-xs"
                   >
                     Cancel
@@ -85,46 +138,52 @@ export default function LibraryPage() {
           </Card>
 
           <Card title="Materials">
-            <ul className="flex flex-col gap-3">
-              {MATERIALS.map((m) => (
-                <li key={m.id} className="rounded-xl bg-surface-2 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-xs font-semibold leading-snug">
-                      {m.title}
-                    </span>
-                    {m.status === "mined" ? (
-                      <span className="shrink-0 rounded-full bg-good/10 px-2 py-0.5 text-[10px] font-medium text-good">
-                        {m.atomCount} atoms
+            {materials.length === 0 ? (
+              <p className="text-xs text-ink-muted">
+                Nothing here yet — paste your first material above.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {materials.map((m) => (
+                  <li key={m.id} className="rounded-xl bg-surface-2 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs font-semibold leading-snug">
+                        {m.title}
                       </span>
-                    ) : (
-                      <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
-                        mining…
-                      </span>
+                      {m.status === "mined" ? (
+                        <span className="shrink-0 rounded-full bg-good/10 px-2 py-0.5 text-[10px] font-medium text-good">
+                          {m.atomCount} atoms
+                        </span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
+                          {m.status === "ingesting" ? "mining…" : "uploaded"}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-[11px] text-ink-muted">
+                      {KIND_LABEL[m.kind]} · {m.words.toLocaleString()} words ·{" "}
+                      {fmtDate(m.addedAt)}
+                    </p>
+                    <p className="mt-2 line-clamp-2 text-[11px] italic leading-relaxed text-ink-muted">
+                      {m.excerpt}
+                    </p>
+                    {m.status === "mined" && (
+                      <button
+                        onClick={() =>
+                          toast(
+                            "info",
+                            "Repurposing — one material into a week of drafts — arrives at Milestone 6."
+                          )
+                        }
+                        className="btn-ghost mt-2 px-3 py-1 text-[11px]"
+                      >
+                        Repurpose this
+                      </button>
                     )}
-                  </div>
-                  <p className="mt-1 text-[11px] text-ink-muted">
-                    {KIND_LABEL[m.kind]} · {m.words.toLocaleString()} words ·{" "}
-                    {fmtDate(m.addedAt)}
-                  </p>
-                  <p className="mt-2 line-clamp-2 text-[11px] italic leading-relaxed text-ink-muted">
-                    {m.excerpt}
-                  </p>
-                  {m.status === "mined" && (
-                    <button
-                      onClick={() =>
-                        toast(
-                          "success",
-                          "Repurpose run queued — a week of drafts from this material. (Sample data)"
-                        )
-                      }
-                      className="btn-ghost mt-2 px-3 py-1 text-[11px]"
-                    >
-                      Repurpose this
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         </div>
 
@@ -142,8 +201,9 @@ export default function LibraryPage() {
         >
           {atoms.length === 0 ? (
             <p className="text-sm text-ink-muted">
-              Nothing matches “{query}”. Try a pillar name or a kind (story,
-              take, lesson, quote, stat).
+              {q
+                ? `Nothing matches “${query}”. Try a pillar name or a kind (story, take, lesson, quote, stat).`
+                : "No atoms yet — mine a material and your reusable stories, takes, and stats land here."}
             </p>
           ) : (
             <ul className="grid gap-3 md:grid-cols-2">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { chat as apiChat } from "@/lib/api";
 import { CREATOR, REVIEW, THREADS } from "@/lib/mock";
 import type { ChatMessage } from "@/lib/types";
@@ -23,8 +23,6 @@ export default function GrowthLeadPage() {
   }
 
   const [thinking, setThinking] = useState(false);
-  const historyRef = useRef<ChatMessage[]>(THREADS[0].messages);
-  historyRef.current = messages;
 
   async function send() {
     const text = input.trim();
@@ -37,9 +35,7 @@ export default function GrowthLeadPage() {
     try {
       const res = await apiChat({
         message: text,
-        history: historyRef.current
-          .slice(-10)
-          .map((m) => ({ role: m.role, content: m.text })),
+        history: messages.slice(-10).map((m) => ({ role: m.role, content: m.text })),
         profile: CREATOR.ipProfile,
       });
       reply = res.reply;

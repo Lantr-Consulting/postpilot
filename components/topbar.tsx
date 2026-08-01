@@ -11,9 +11,12 @@ function ThemeToggle() {
   const [theme, setTheme] = useState<"dark" | "light" | null>(null);
 
   useEffect(() => {
-    setTheme(
-      document.documentElement.dataset.theme === "light" ? "light" : "dark"
+    // Deferred: reading the pre-paint data-theme, then a state set — kept
+    // out of the synchronous effect body per the React compiler rules.
+    const id = requestAnimationFrame(() =>
+      setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark")
     );
+    return () => cancelAnimationFrame(id);
   }, []);
 
   function toggle() {

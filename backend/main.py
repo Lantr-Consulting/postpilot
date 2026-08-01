@@ -20,7 +20,10 @@ from pydantic import BaseModel
 
 load_dotenv()
 
+import agent  # noqa: E402
+import editorial  # noqa: E402
 import research  # noqa: E402
+import store  # noqa: E402
 
 app = FastAPI(title="PostPilot backend")
 
@@ -61,6 +64,170 @@ def trends(
     if not items:
         raise HTTPException(status_code=502, detail="all research sources came back empty")
     return {"items": items}
+
+
+# ---------- The workspace (file store until Supabase at M5) ----------
+
+@app.get("/workspace")
+def get_workspace():
+    return store.workspace()
+
+
+class MaterialRequest(BaseModel):
+    title: str
+    kind: str = "notes"
+    text: str
+
+
+@app.post("/materials")
+def add_material(req: MaterialRequest):
+    row = store.add(
+        "materials",
+        {
+            "id": store.new_id("mat"),
+            "title": req.title.strip()[:120] or "Untitled material",
+            "kind": req.kind if req.kind in ("transcript", "notes", "post", "newsletter", "other") else "other",
+            "addedAt": store.today(),
+            "words": len(req.text.split()),
+            "status": "uploaded",
+            "atomCount": 0,
+            "excerpt": req.text.strip()[:180],
+            "text": req.text.strip()[:60000],
+        },
+    )
+    return {k: v for k, v in row.items() if k != "text"}
+
+
+class ProfilePayload(BaseModel):
+    profile: dict
+
+
+@app.post("/materials/{material_id}/ingest")
+def ingest_material(material_id: str, req: ProfilePayload):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    material = store.get("materials", material_id)
+    if material is None:
+        raise HTTPException(status_code=404, detail="material not found")
+    store.update("materials", material_id, {"status": "ingesting"})
+    atoms = agent.mine_material(material, req.profile)
+    store.add_many("atoms", atoms)
+    row = store.update(
+        "materials", material_id, {"status": "mined", "atomCount": len(atoms)}
+    )
+    return {"material": {k: v for k, v in row.items() if k != "text"}, "atoms": atoms}
+
+
+class ResearchRequest(BaseModel):
+    profile: dict
+    mission: str | None = None
+
+
+@app.post("/research")
+def run_research(req: ResearchRequest):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    ideas = agent.run_research(req.profile, req.mission)
+    if not ideas:
+        raise HTTPException(status_code=502, detail="the researcher came back empty — try again")
+    store.add_many("ideas", ideas)
+    return {"ideas": ideas}
+
+
+class AcceptIdeaRequest(BaseModel):
+    profile: dict
+    rules: dict
+    platforms: list[str]
+
+
+@app.post("/ideas/{idea_id}/accept")
+def accept_idea(idea_id: str, req: AcceptIdeaRequest):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    idea = store.get("ideas", idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="idea not found")
+    store.update("ideas", idea_id, {"status": "accepted"})
+    platforms = [p for p in req.platforms if p in editorial.PLATFORM_LIMITS][:5]
+    drafts = agent.draft_variants(idea, req.profile, req.rules, platforms or ["x"])
+    store.add_many("drafts", drafts)
+    return {"drafts": drafts}
+
+
+class DeclineRequest(BaseModel):
+    reason: str
+
+
+@app.post("/ideas/{idea_id}/decline")
+def decline_idea(idea_id: str, req: DeclineRequest):
+    row = store.update(
+        "ideas", idea_id,
+        {"status": "declined", "feedback": {"reason": req.reason.strip()[:300]}},
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="idea not found")
+    return row
+
+
+class DraftEditRequest(BaseModel):
+    text: str
+    rules: dict
+
+
+@app.patch("/drafts/{draft_id}")
+def edit_draft(draft_id: str, req: DraftEditRequest):
+    draft = store.get("drafts", draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="draft not found")
+    checks = editorial.check_draft(
+        draft["platform"], req.text, draft["hashtags"], draft["sponsored"],
+        req.rules, draft["atomIds"], store.atom_titles(), store.shipped_texts(),
+    )
+    return store.update("drafts", draft_id, {"text": req.text[:6000], "checks": checks})
+
+
+@app.post("/drafts/{draft_id}/approve")
+def approve_draft(draft_id: str, req: DraftEditRequest):
+    """Approve re-runs the engine on the FINAL text — after any human edit.
+    A failing check is a hard veto: 409, with the fresh rows attached."""
+    draft = store.get("drafts", draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="draft not found")
+    checks = editorial.check_draft(
+        draft["platform"], req.text, draft["hashtags"], draft["sponsored"],
+        req.rules, draft["atomIds"], store.atom_titles(), store.shipped_texts(),
+    )
+    if editorial.blocked(checks):
+        store.update("drafts", draft_id, {"text": req.text[:6000], "checks": checks})
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "The editorial engine blocked this draft.", "checks": checks},
+        )
+    return store.update(
+        "drafts", draft_id,
+        {"text": req.text[:6000], "checks": checks, "status": "approved", "slotDate": store.today()},
+    )
+
+
+@app.post("/drafts/{draft_id}/decline")
+def decline_draft(draft_id: str, req: DeclineRequest):
+    row = store.update(
+        "drafts", draft_id,
+        {"status": "declined", "feedback": {"reason": req.reason.strip()[:300]}},
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="draft not found")
+    return row
+
+
+@app.post("/drafts/{draft_id}/export")
+def export_draft(draft_id: str):
+    draft = store.get("drafts", draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="draft not found")
+    if draft["status"] != "approved":
+        raise HTTPException(status_code=409, detail="only approved drafts export")
+    return store.update("drafts", draft_id, {"status": "exported"})
 
 
 # ---------- LLM: the IP interpreter ----------
