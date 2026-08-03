@@ -88,13 +88,81 @@ def ensure_creator(user_id: str, email: str, defaults: dict) -> dict:
         "niche": defaults["niche"],
         "activated": False,
     }
-    return _rest("POST", "pp_creators", json=row, extra_headers=_REPR)[0]
+    created = _rest("POST", "pp_creators", json=row, extra_headers=_REPR)[0]
+    # Every new account starts with the built-in weekly growth review.
+    create_campaign(user_id, {
+        "title": "Weekly growth review",
+        "prompt": "Review goals, pillar coverage, the calendar, and logged results. Propose strategy moves with rationale.",
+        "cadence": "weekly",
+        "hourLocal": 8,
+    }, built_in=True)
+    return created
 
 
 def update_creator(user_id: str, fields: dict) -> dict:
     fields = {**fields, "updated_at": _now()}
     return _rest("PATCH", "pp_creators", params={"user_id": f"eq.{user_id}"},
                  json=fields, extra_headers=_REPR)[0]
+
+
+# ---------------------------------------------------------------------------
+# Campaigns — standing missions. The scheduler's claim is a CAS: PATCH
+# where last_run_at is still stale. Each PostgREST PATCH is its own
+# transaction, so when two workers race, the loser's WHERE re-evaluates
+# against the winner's write and matches zero rows.
+# ---------------------------------------------------------------------------
+
+def campaign_out(row: dict) -> dict:
+    return {
+        "id": row["id"], "title": row["title"], "prompt": row["prompt"],
+        "cadence": row["cadence"], "hourLocal": row["hour_local"],
+        "enabled": row["enabled"], "builtIn": row["built_in"],
+        "lastRunAt": row.get("last_run_at"), "lastReport": row.get("last_report"),
+    }
+
+
+def list_campaigns(user_id: str) -> list[dict]:
+    return _rest("GET", "pp_campaigns",
+                 params={"user_id": f"eq.{user_id}", "order": "created_at.asc"})
+
+
+def create_campaign(user_id: str, c: dict, built_in: bool = False) -> dict:
+    return _rest("POST", "pp_campaigns", json={
+        "user_id": user_id, "title": c["title"], "prompt": c["prompt"],
+        "cadence": c["cadence"], "hour_local": c["hourLocal"],
+        "enabled": c.get("enabled", True), "built_in": built_in,
+    }, extra_headers=_REPR)[0]
+
+
+def update_campaign(user_id: str, campaign_id: str, fields: dict) -> dict | None:
+    rows = _rest("PATCH", "pp_campaigns",
+                 params={"user_id": f"eq.{user_id}", "id": f"eq.{campaign_id}"},
+                 json=fields, extra_headers=_REPR)
+    return rows[0] if rows else None
+
+
+def delete_campaign(user_id: str, campaign_id: str) -> bool:
+    rows = _rest("DELETE", "pp_campaigns",
+                 params={"user_id": f"eq.{user_id}", "id": f"eq.{campaign_id}",
+                         "built_in": "is.false"},
+                 extra_headers=_REPR)
+    return bool(rows)
+
+
+def scheduled_campaigns() -> list[dict]:
+    """Every enabled, non-manual campaign across ALL users — the scheduler
+    is global; per-campaign claims keep workers from doubling up."""
+    return _rest("GET", "pp_campaigns",
+                 params={"enabled": "is.true", "cadence": "neq.manual"})
+
+
+def claim_campaign(campaign_id: str, stale_before_iso: str) -> bool:
+    """The CAS. True means this worker owns this firing."""
+    rows = _rest("PATCH", "pp_campaigns",
+                 params={"id": f"eq.{campaign_id}",
+                         "or": f"(last_run_at.is.null,last_run_at.lt.{stale_before_iso})"},
+                 json={"last_run_at": _now()}, extra_headers=_REPR)
+    return bool(rows)
 
 
 # ---------------------------------------------------------------------------

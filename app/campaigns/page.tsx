@@ -1,6 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  createCampaign,
+  deleteCampaign,
+  getCampaigns,
+  pollRun,
+  runCampaignNow,
+  updateCampaign,
+} from "@/lib/api";
+import { useMe } from "@/lib/use-me";
 import { CAMPAIGNS } from "@/lib/mock";
 import type { Campaign } from "@/lib/types";
 import { fmtDate } from "@/lib/format";
@@ -15,13 +24,100 @@ const CADENCE_LABEL: Record<Campaign["cadence"], string> = {
 
 export default function CampaignsPage() {
   const toast = useToast();
-  const [campaigns, setCampaigns] = useState<Campaign[]>(CAMPAIGNS);
+  const { me } = useMe();
+  const signedIn = me !== null;
 
-  function toggle(id: string) {
-    setCampaigns((cs) =>
-      cs.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c))
-    );
-    toast("info", "Saved. The scheduler claims due campaigns once a minute. (Sample data)");
+  const [liveCampaigns, setLiveCampaigns] = useState<Campaign[] | null>(null);
+  const [mockCampaigns, setMockCampaigns] = useState<Campaign[]>(CAMPAIGNS);
+  const [running, setRunning] = useState<string | null>(null);
+  const [runProgress, setRunProgress] = useState("");
+
+  // New-campaign form
+  const [title, setTitle] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [cadence, setCadence] = useState<Campaign["cadence"]>("weekly");
+  const [hour, setHour] = useState(8);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    getCampaigns().then((cs) => alive && setLiveCampaigns(cs)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
+
+  const live = signedIn && liveCampaigns !== null;
+  const campaignList = live ? liveCampaigns! : mockCampaigns;
+
+  async function toggle(c: Campaign) {
+    if (!live) {
+      setMockCampaigns((cs) =>
+        cs.map((x) => (x.id === c.id ? { ...x, enabled: !x.enabled } : x))
+      );
+      toast("info", "Saved. (Sample data)");
+      return;
+    }
+    const updated = await updateCampaign(c.id, { enabled: !c.enabled }).catch(() => null);
+    if (updated) {
+      setLiveCampaigns((cs) => cs!.map((x) => (x.id === c.id ? updated : x)));
+      toast(
+        "info",
+        updated.enabled
+          ? "On — the scheduler claims due campaigns once a minute."
+          : "Off — it won't fire until you re-enable it."
+      );
+    }
+  }
+
+  async function runNow(c: Campaign) {
+    if (!live) {
+      toast("info", "Sign in to run real campaigns. (Sample data)");
+      return;
+    }
+    setRunning(c.id);
+    setRunProgress("Claiming the run…");
+    try {
+      const run = await runCampaignNow(c.id);
+      const done = await pollRun(run.id, (r) => setRunProgress(r.progress || "Working…"));
+      setLiveCampaigns(await getCampaigns());
+      toast(
+        done.status === "done" ? "success" : "error",
+        done.report ?? (done.status === "done" ? "Done." : "Run failed.")
+      );
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "Couldn't start the run.");
+    }
+    setRunning(null);
+    setRunProgress("");
+  }
+
+  async function remove(c: Campaign) {
+    if (!live || c.builtIn) return;
+    if (!window.confirm(`Delete “${c.title}”?`)) return;
+    await deleteCampaign(c.id).catch(() => {});
+    setLiveCampaigns(await getCampaigns());
+    toast("info", "Campaign deleted.");
+  }
+
+  async function create() {
+    if (!title.trim() || !prompt.trim()) return;
+    if (!live) {
+      toast("info", "Sign in to create real campaigns. (Sample data)");
+      return;
+    }
+    setCreating(true);
+    try {
+      await createCampaign({ title, prompt, cadence, hourLocal: hour });
+      setLiveCampaigns(await getCampaigns());
+      setTitle("");
+      setPrompt("");
+      toast("success", "Campaign saved — the scheduler picks it up within a minute of its hour.");
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "Couldn't save the campaign.");
+    }
+    setCreating(false);
   }
 
   return (
@@ -32,7 +128,7 @@ export default function CampaignsPage() {
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {campaigns.map((c) => (
+        {campaignList.map((c) => (
           <Card
             key={c.id}
             title={c.title}
@@ -46,7 +142,7 @@ export default function CampaignsPage() {
                 <button
                   role="switch"
                   aria-checked={c.enabled}
-                  onClick={() => toggle(c.id)}
+                  onClick={() => toggle(c)}
                   className={`relative h-5 w-9 rounded-full transition-colors ${
                     c.enabled ? "bg-accent" : "bg-wash-2"
                   }`}
@@ -65,9 +161,15 @@ export default function CampaignsPage() {
             </p>
             <p className="mt-2 text-[11px] text-ink-muted">
               {CADENCE_LABEL[c.cadence]}
-              {c.cadence !== "manual" && ` at ${c.hourLocal}:00`}
-              {c.lastRunAt && ` · last ran ${fmtDate(c.lastRunAt)}`}
+              {c.cadence !== "manual" && ` at ${String(c.hourLocal).padStart(2, "0")}:00 UTC`}
+              {c.lastRunAt && ` · last ran ${fmtDate(c.lastRunAt.slice(0, 10))}`}
             </p>
+            {running === c.id && (
+              <p className="mt-2 flex items-center gap-2 text-xs text-ink-2">
+                <span aria-hidden className="inline-block size-2 animate-pulse rounded-full bg-accent" />
+                {runProgress}
+              </p>
+            )}
             {c.lastReport && (
               <div className="mt-3 rounded-xl border border-hairline p-3">
                 <h3 className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
@@ -78,32 +180,74 @@ export default function CampaignsPage() {
                 </p>
               </div>
             )}
-            <button
-              onClick={() =>
-                toast("success", "Run queued — progress appears here. (Sample data)")
-              }
-              className="btn-ghost mt-3 px-3.5 py-1.5 text-xs"
-            >
-              Run now
-            </button>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => runNow(c)}
+                disabled={running !== null}
+                className="btn-ghost px-3.5 py-1.5 text-xs"
+              >
+                {running === c.id ? "Running…" : "Run now"}
+              </button>
+              {live && !c.builtIn && (
+                <button
+                  onClick={() => remove(c)}
+                  className="btn-ghost px-3.5 py-1.5 text-xs hover:text-critical"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
           </Card>
         ))}
 
         <Card title="New campaign">
           <p className="text-xs leading-relaxed text-ink-muted">
-            Write a standing mission in plain English — “every Friday, draft a
-            newsletter CTA post from my best atom of the week.”
+            Write a standing mission in plain English — “every Friday, find
+            angles for a newsletter CTA post from what moved this week.”
           </p>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            className="mt-3 w-full rounded-lg border border-hairline bg-page px-3 py-2 text-sm text-ink placeholder:text-ink-muted"
+          />
           <textarea
             rows={3}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
             placeholder="Every …"
-            className="mt-3 w-full rounded-lg border border-hairline bg-page p-3 text-sm text-ink placeholder:text-ink-muted"
+            className="mt-2 w-full rounded-lg border border-hairline bg-page p-3 text-sm text-ink placeholder:text-ink-muted"
           />
+          <div className="mt-2 flex gap-2">
+            <select
+              value={cadence}
+              onChange={(e) => setCadence(e.target.value as Campaign["cadence"])}
+              className="flex-1 rounded-lg border border-hairline bg-page px-3 py-2 text-sm text-ink"
+            >
+              <option value="manual">Run manually</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+            {cadence !== "manual" && (
+              <select
+                value={hour}
+                onChange={(e) => setHour(Number(e.target.value))}
+                className="w-32 rounded-lg border border-hairline bg-page px-3 py-2 text-sm text-ink"
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0")}:00 UTC
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
           <button
-            onClick={() => toast("success", "Campaign saved. (Sample data)")}
+            onClick={create}
+            disabled={creating || !title.trim() || !prompt.trim()}
             className="btn-primary mt-3 px-3.5 py-2 text-sm"
           >
-            Create campaign
+            {creating ? "Saving…" : "Create campaign"}
           </button>
         </Card>
       </div>

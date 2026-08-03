@@ -11,7 +11,8 @@ from __future__ import annotations
 import json
 import os
 import threading
-from datetime import date
+import time
+from datetime import date, datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -333,20 +334,27 @@ def run_research(req: ResearchRequest, user: dict = Depends(auth.current_user)):
     mission = req.mission
 
     def worker(progress, get_steer):
-        ideas = agent.run_research(user_id, profile, mission,
+        return _research_and_store(user_id, profile, mission,
                                    on_progress=progress, get_steer=get_steer)
-        if not ideas:
-            raise RuntimeError("the researcher came back empty — try again")
-        rows = db.create_ideas(user_id, ideas)
-        # Fresh trends supersede stale proposals from earlier runs.
-        superseded = db.supersede_stale_ideas(user_id, rows[0]["run_id"])
-        return (
-            f"{len(rows)} ideas proposed"
-            + (f" · {superseded} stale idea{'s' if superseded != 1 else ''} superseded" if superseded else "")
-            + "."
-        )
 
     return _start_run(user, "research", worker)
+
+
+def _research_and_store(user_id: str, profile: dict, mission: str | None,
+                        on_progress=None, get_steer=None) -> str:
+    """Shared by the interactive endpoint and the campaign scheduler."""
+    ideas = agent.run_research(user_id, profile, mission,
+                               on_progress=on_progress, get_steer=get_steer)
+    if not ideas:
+        raise RuntimeError("the researcher came back empty — try again")
+    rows = db.create_ideas(user_id, ideas)
+    # Fresh trends supersede stale proposals from earlier runs.
+    superseded = db.supersede_stale_ideas(user_id, rows[0]["run_id"])
+    return (
+        f"{len(rows)} ideas proposed"
+        + (f" · {superseded} stale idea{'s' if superseded != 1 else ''} superseded" if superseded else "")
+        + "."
+    )
 
 
 @app.post("/ideas/{idea_id}/accept")
@@ -468,6 +476,145 @@ def log_result(req: ResultRequest, user: dict = Depends(auth.current_user)):
     }))
 
 
+# ---------- Campaigns: standing missions + the always-on scheduler ----------
+
+class CampaignRequest(BaseModel):
+    title: str
+    prompt: str
+    cadence: str = "manual"
+    hourLocal: int = 8
+
+
+@app.get("/campaigns")
+def campaigns(user: dict = Depends(auth.current_user)):
+    _creator(user)
+    return {"campaigns": [db.campaign_out(c) for c in db.list_campaigns(user["id"])]}
+
+
+@app.post("/campaigns")
+def create_campaign(req: CampaignRequest, user: dict = Depends(auth.current_user)):
+    _creator(user)
+    if not req.title.strip() or not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="a campaign needs a title and a mission")
+    row = db.create_campaign(user["id"], {
+        "title": req.title.strip()[:120],
+        "prompt": req.prompt.strip()[:1000],
+        "cadence": req.cadence if req.cadence in ("manual", "daily", "weekly") else "manual",
+        "hourLocal": max(0, min(23, int(req.hourLocal))),
+    })
+    return db.campaign_out(row)
+
+
+class CampaignPatch(BaseModel):
+    title: str | None = None
+    prompt: str | None = None
+    cadence: str | None = None
+    hourLocal: int | None = None
+    enabled: bool | None = None
+
+
+@app.patch("/campaigns/{campaign_id}")
+def patch_campaign(campaign_id: str, req: CampaignPatch, user: dict = Depends(auth.current_user)):
+    fields = {}
+    if req.title is not None:
+        fields["title"] = req.title.strip()[:120]
+    if req.prompt is not None:
+        fields["prompt"] = req.prompt.strip()[:1000]
+    if req.cadence in ("manual", "daily", "weekly"):
+        fields["cadence"] = req.cadence
+    if req.hourLocal is not None:
+        fields["hour_local"] = max(0, min(23, int(req.hourLocal)))
+    if req.enabled is not None:
+        fields["enabled"] = bool(req.enabled)
+    if not fields:
+        raise HTTPException(status_code=400, detail="nothing to update")
+    row = db.update_campaign(user["id"], campaign_id, fields)
+    if row is None:
+        raise HTTPException(status_code=404, detail="campaign not found")
+    return db.campaign_out(row)
+
+
+@app.delete("/campaigns/{campaign_id}")
+def remove_campaign(campaign_id: str, user: dict = Depends(auth.current_user)):
+    if not db.delete_campaign(user["id"], campaign_id):
+        raise HTTPException(status_code=404, detail="campaign not found (built-ins can't be deleted)")
+    return {"ok": True}
+
+
+def _campaign_report(campaign: dict, creator: dict, on_progress=None) -> str:
+    """One campaign firing. Built-in = the weekly growth review; everything
+    else runs the campaign's mission through the researcher."""
+    user_id = campaign["user_id"]
+    if campaign["built_in"]:
+        return _review_and_store(user_id, creator, on_progress=on_progress)
+    profile = {**creator["ip_profile"], "niche": creator["niche"]}
+    return _research_and_store(user_id, profile, campaign["prompt"], on_progress=on_progress)
+
+
+@app.post("/campaigns/{campaign_id}/run")
+def run_campaign_now(campaign_id: str, user: dict = Depends(auth.current_user)):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    creator = _creator(user)
+    _require_active(creator)
+    rows = [c for c in db.list_campaigns(user["id"]) if c["id"] == campaign_id]
+    if not rows:
+        raise HTTPException(status_code=404, detail="campaign not found")
+    campaign = rows[0]
+    user_id = user["id"]
+
+    def worker(progress, get_steer):
+        progress(f"Running “{campaign['title']}”…")
+        report = _campaign_report(campaign, creator, on_progress=progress)
+        db.update_campaign(user_id, campaign_id,
+                           {"last_run_at": db._now(), "last_report": report[:500]})
+        return report
+
+    return _start_run(user, "campaign", worker)
+
+
+# The scheduler: one 60-second loop per worker process; the CAS claim in
+# db.claim_campaign means exactly one worker fires each due campaign.
+_CADENCE_STALENESS = {"daily": timedelta(hours=20), "weekly": timedelta(days=6)}
+
+
+def _scheduler_tick():
+    now = datetime.now(timezone.utc)
+    for c in db.scheduled_campaigns():
+        staleness = _CADENCE_STALENESS.get(c["cadence"])
+        if staleness is None or now.hour < c["hour_local"]:
+            continue
+        threshold = now - staleness
+        last = c.get("last_run_at")
+        if last and datetime.fromisoformat(last) >= threshold:
+            continue
+        if not db.claim_campaign(c["id"], threshold.isoformat()):
+            continue  # another worker owns this firing
+        creator = db.get_creator(c["user_id"])
+        if creator is None or not creator["activated"] or creator["paused"]:
+            db.update_campaign(c["user_id"], c["id"],
+                               {"last_report": "Skipped — creator paused or not activated."})
+            continue
+        try:
+            report = _campaign_report(c, creator)
+            db.update_campaign(c["user_id"], c["id"], {"last_report": report[:500]})
+        except Exception as e:
+            db.update_campaign(c["user_id"], c["id"], {"last_report": f"Failed: {e}"[:300]})
+
+
+def _scheduler_loop():
+    while True:
+        time.sleep(60)  # sleep first: let the module finish importing
+        try:
+            _scheduler_tick()
+        except Exception:
+            pass  # a bad tick must never kill the loop
+
+
+if os.getenv("DISABLE_SCHEDULER") != "1" and DEEPSEEK_KEY:
+    threading.Thread(target=_scheduler_loop, daemon=True).start()
+
+
 # ---------- Growth reviews: strategy moves the creator blesses ----------
 
 @app.get("/reviews")
@@ -485,37 +632,46 @@ def run_review(user: dict = Depends(auth.current_user)):
     user_id = user["id"]
 
     def worker(progress, get_steer):
-        progress("Reading your goals, pipeline, and results…")
-        ideas = [db.idea_out(i) for i in db.list_ideas(user_id)]
-        drafts = [db.draft_out(d) for d in db.list_drafts(user_id)]
-        results = [db.result_out(r) for r in db.list_results(user_id)]
-
-        def count_by(rows, key):
-            out: dict[str, int] = {}
-            for r in rows:
-                out[r.get(key) or "—"] = out.get(r.get(key) or "—", 0) + 1
-            return out
-
-        stats = {
-            "ideasByPillar": count_by(ideas, "pillar"),
-            "ideasByStatus": count_by(ideas, "status"),
-            "draftsByStatus": count_by(drafts, "status"),
-            "draftsByPlatform": count_by(drafts, "platform"),
-            "results": [
-                {"title": r["title"], "platform": r["platform"], "postedAt": r["postedAt"],
-                 "metrics": r["metrics"], "notes": r.get("notes")}
-                for r in results[:20]
-            ],
-            "declineLessons": db.decline_lessons(user_id),
-        }
-        progress("Writing the review…")
-        review = agent.growth_review(user_id, creator["ip_profile"], stats)
-        if review is None:
-            raise RuntimeError("the review came back empty — try again")
-        db.create_review(user_id, review["summary"], review["moves"])
-        return review["summary"][:300]
+        return _review_and_store(user_id, creator, on_progress=progress)
 
     return _start_run(user, "review", worker)
+
+
+def _review_and_store(user_id: str, creator: dict, on_progress=None) -> str:
+    """Shared by the interactive endpoint and the campaign scheduler."""
+    def progress(msg):
+        if on_progress:
+            on_progress(msg)
+
+    progress("Reading your goals, pipeline, and results…")
+    ideas = [db.idea_out(i) for i in db.list_ideas(user_id)]
+    drafts = [db.draft_out(d) for d in db.list_drafts(user_id)]
+    results = [db.result_out(r) for r in db.list_results(user_id)]
+
+    def count_by(rows, key):
+        out: dict[str, int] = {}
+        for r in rows:
+            out[r.get(key) or "—"] = out.get(r.get(key) or "—", 0) + 1
+        return out
+
+    stats = {
+        "ideasByPillar": count_by(ideas, "pillar"),
+        "ideasByStatus": count_by(ideas, "status"),
+        "draftsByStatus": count_by(drafts, "status"),
+        "draftsByPlatform": count_by(drafts, "platform"),
+        "results": [
+            {"title": r["title"], "platform": r["platform"], "postedAt": r["postedAt"],
+             "metrics": r["metrics"], "notes": r.get("notes")}
+            for r in results[:20]
+        ],
+        "declineLessons": db.decline_lessons(user_id),
+    }
+    progress("Writing the review…")
+    review = agent.growth_review(user_id, creator["ip_profile"], stats)
+    if review is None:
+        raise RuntimeError("the review came back empty — try again")
+    db.create_review(user_id, review["summary"], review["moves"])
+    return review["summary"][:300]
 
 
 class MoveDecision(BaseModel):

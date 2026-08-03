@@ -5,6 +5,7 @@
 import { supabase } from "./supabase";
 import type {
   Atom,
+  Campaign,
   Draft,
   EditorialRules,
   Idea,
@@ -295,6 +296,36 @@ export function declineDraft(id: string, reason: string): Promise<Draft> {
 
 export function exportDraft(id: string): Promise<Draft> {
   return req(`/drafts/${id}/export`, { method: "POST" });
+}
+
+// ---------- Campaigns ----------
+
+export function getCampaigns(): Promise<Campaign[]> {
+  return req<{ campaigns: Campaign[] }>("/campaigns").then((r) => r.campaigns);
+}
+
+export function createCampaign(args: {
+  title: string;
+  prompt: string;
+  cadence: string;
+  hourLocal: number;
+}): Promise<Campaign> {
+  return req("/campaigns", { method: "POST", body: JSON.stringify(args) });
+}
+
+export function updateCampaign(
+  id: string,
+  fields: Partial<Pick<Campaign, "title" | "prompt" | "cadence" | "hourLocal" | "enabled">>
+): Promise<Campaign> {
+  return req(`/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(fields) });
+}
+
+export function deleteCampaign(id: string): Promise<{ ok: boolean }> {
+  return req(`/campaigns/${id}`, { method: "DELETE" });
+}
+
+export function runCampaignNow(id: string): Promise<Run> {
+  return req(`/campaigns/${id}/run`, { method: "POST" });
 }
 
 // ---------- Results (self-reported) ----------

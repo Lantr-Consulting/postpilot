@@ -15,19 +15,21 @@ A Lantr sample project, built in the same order a student builds theirs.
 
 **Live:** https://postpilot-drab-seven.vercel.app
 
-## Status: Milestone 7 — Workspace
+## Status: Milestone 8 — Campaigns
 
-The agent's work went async. Research, mining, repurposing, and reviews now
-run in background threads: the client gets a run id back immediately and
-polls `pp_runs` for live progress ("Scanning your niche…", "Shaping
-ideas…"). You can **steer a run mid-flight** — notes sent while the tools
-are scanning are read before the ideas get shaped. A fresh research run
-**supersedes** still-pending ideas from older runs, so last week's trends
-don't sit in the Studio looking current. And the per-user run lock lives in
-the database — a partial unique index makes the INSERT the claim, arbitrated
-by Postgres across both uvicorn workers (an in-memory lock dies with 2
-workers; runs orphaned by a restart are failed and reclaimed after 10
-minutes). Verified live: a second run while one is running gets a 409.
+The Growth Lead works while you don't. Campaigns are standing missions in
+plain English ("every Monday, plan my week…") with a cadence; a 60-second
+scheduler loop runs in every backend worker, and a **compare-and-swap
+claim** — a PATCH whose WHERE re-checks `last_run_at` — guarantees exactly
+one worker fires each due campaign (each PostgREST PATCH is its own
+transaction; the race's loser matches zero rows). Every new account ships
+with the built-in **weekly growth review** as a campaign; custom missions
+run through the researcher, and their idea batches land in the Studio while
+reports stay on the campaign card — separate surfaces, by design. Verified
+live: the scheduler claimed and fired a due campaign autonomously within
+one tick, and its review cited the account's real pipeline numbers. Paused
+or not-yet-activated creators are skipped — always-on never overrides the
+Activate gate or the kill switch.
 
 Full design in [DESIGN.md](DESIGN.md).
 
@@ -53,8 +55,8 @@ Full design in [DESIGN.md](DESIGN.md).
 | 5. Memory & accounts | Supabase database, sign-in, one creator per user ✅ |
 | 6. Growth Lead upgrade | Onboarding/Activate, versioned brand book, goals, repurposing, growth reviews, decline-reason lessons ✅ |
 | 7. Workspace | Async runs (research/ingestion/review), threads, staleness supersession ✅ |
-| 8. Campaigns | Scheduler with cross-worker claim, scheduled weekly reviews *(next)* |
-| 9. Evals | Deterministic checks (incl. atom citations resolve) + calibrated LLM judge for voice fidelity; measured improvement |
+| 8. Campaigns | Scheduler with cross-worker claim, scheduled weekly reviews ✅ |
+| 9. Evals | Deterministic checks (incl. atom citations resolve) + calibrated LLM judge for voice fidelity; measured improvement *(next)* |
 | 10. Polish + Blueprint | Product polish, BLUEPRINT.md demo package, BUILD_GUIDE.md |
 
 ## Stack
