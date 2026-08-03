@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { MobileNav, Sidebar } from "@/components/sidebar";
 import { ToastProvider } from "@/components/toast";
-import { TopBar } from "@/components/topbar";
-import { DisclaimerBanner } from "@/components/ui";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,9 +22,9 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "PostPilot — your AI Growth Lead",
+  title: "PostPilot — an AI Growth Lead that knows your story",
   description:
-    "Learns your IP, mines your materials, plans your calendar, and drafts posts you approve and export. A Lantr sample project.",
+    "It learns your IP, mines your raw materials into cited atoms, drafts posts through an editorial engine, and runs campaigns while you're away. Export-only — you press publish. A Lantr sample project.",
 };
 
 export default function RootLayout({
@@ -42,7 +39,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
-      <body className="flex h-screen overflow-hidden">
+      <body className="min-h-screen">
         {/* Apply the saved theme before first paint to avoid a flash. */}
         <script
           dangerouslySetInnerHTML={{
@@ -50,17 +47,7 @@ export default function RootLayout({
               'try{if(localStorage.getItem("pp-theme")==="light")document.documentElement.dataset.theme="light"}catch(e){}',
           }}
         />
-        <ToastProvider>
-          <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <TopBar />
-            <DisclaimerBanner />
-            <MobileNav />
-            <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-y-auto px-5 py-8">
-              {children}
-            </main>
-          </div>
-        </ToastProvider>
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );
