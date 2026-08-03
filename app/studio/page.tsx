@@ -33,10 +33,9 @@ const SOURCE_LABEL: Record<TrendSource, string> = {
   trends: "Trends",
 };
 
-// Until accounts land (M5), the demo creator's profile is the context the
-// backend works from.
-const PROFILE = { ...CREATOR.ipProfile, niche: CREATOR.niche };
-const RULES = CREATOR.editorialRules;
+function apiMessage(e: unknown, fallback: string): string {
+  return e instanceof Error && e.message.length > 3 ? e.message : fallback;
+}
 
 export default function StudioPage() {
   const toast = useToast();
@@ -70,16 +69,16 @@ export default function StudioPage() {
 
   async function research() {
     if (!live) {
-      toast("info", "Backend offline — research needs the brain.");
+      toast("info", "Sign in to build your own pipeline — this is sample data.");
       return;
     }
     setResearching(true);
     try {
-      const { ideas: fresh } = await runResearch(PROFILE);
+      const { ideas: fresh } = await runResearch();
       await refresh();
       toast("success", `${fresh.length} ideas proposed — evidence attached.`);
-    } catch {
-      toast("error", "The researcher came back empty. Try again in a minute.");
+    } catch (e) {
+      toast("error", apiMessage(e, "The researcher came back empty. Try again in a minute."));
     }
     setResearching(false);
   }
@@ -102,15 +101,11 @@ export default function StudioPage() {
     if (live) {
       setDraftingIdea(id);
       try {
-        const { drafts: fresh } = await acceptIdea(id, {
-          profile: CREATOR.ipProfile,
-          rules: RULES,
-          platforms: CREATOR.platforms,
-        });
+        const { drafts: fresh } = await acceptIdea(id);
         await refresh();
         toast("success", `${fresh.length} platform variants drafted and checked.`);
-      } catch {
-        toast("error", "Drafting failed — try accepting again.");
+      } catch (e) {
+        toast("error", apiMessage(e, "Drafting failed — try accepting again."));
       }
       setDraftingIdea(null);
     } else {
@@ -122,7 +117,7 @@ export default function StudioPage() {
   async function saveEdit(d: Draft, text: string) {
     setEditing(null);
     if (live) {
-      await editDraft(d.id, text, RULES).catch(() => {});
+      await editDraft(d.id, text).catch(() => {});
       await refresh();
       toast("info", "Edited — the engine re-checked your text.");
     } else {
@@ -141,7 +136,7 @@ export default function StudioPage() {
     }
     setBusyDraft(d.id);
     try {
-      const { blockedChecks } = await approveDraft(d.id, d.text, RULES);
+      const { blockedChecks } = await approveDraft(d.id, d.text);
       await refresh();
       if (blockedChecks) {
         toast("error", "The editorial engine blocked this draft — see the flagged checks.");

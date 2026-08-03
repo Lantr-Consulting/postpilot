@@ -15,22 +15,20 @@ A Lantr sample project, built in the same order a student builds theirs.
 
 **Live:** https://postpilot-drab-seven.vercel.app
 
-## Status: Milestone 4 — Hands
+## Status: Milestone 5 — Memory & accounts
 
-Both agentic pipelines are live. **Ingestion:** paste a transcript or brain
-dump and `agent.mine_material` turns it into tagged Library atoms — only
-what's genuinely in the text, never embellished. **Generation:** Run
-research and a LangChain tool-calling agent scans your niche (Bluesky,
-news, Reddit, Trends) and your Library, returns ideas with dual evidence
-(the outside signal + your own atom), and accepting one drafts
-platform-tailored variants. Every draft passes through `editorial.py` —
-pure code, every rule cited (X's 280 chars, 16 CFR 255, your banned-phrase
-list, difflib duplicate distance, atom citations that must resolve),
-unit-tested in `test_editorial.py` (11 tests). Approve re-runs the engine
-on your final edited text; a failing check is a hard 409 veto. The lesson
-that found us: `pip` silently upgraded `openai` under LangChain locally
-while Railway's resolver refused — pin what you actually run. Full design
-in [DESIGN.md](DESIGN.md).
+Two people, two worlds. Password sign-in (Supabase Auth on the shared
+sample-fleet project — `pp_`-prefixed tables beside the siblings' — a
+shortcut a real student wouldn't take), one creator per user, and RLS
+read-own policies on all nine tables with every write going through the
+backend's service key. New creators start with a **blank, inactive brand
+book**: the interpreter now also extracts your niche (topics, subreddits,
+queries) from your story, and the server enforces the gate — research,
+mining, and drafting return 403 until you explicitly Activate. Your
+editorial rules, Library, pipeline, results, and Growth Lead threads are
+all yours alone (verified: a second account sees zero rows). Signed out,
+the whole app still runs on the demo creator's sample data. Full design in
+[DESIGN.md](DESIGN.md).
 
 - **Today** — calendar strip, pipeline counts, streak, latest Growth Lead insight
 - **Studio** — niche radar → idea cards evidenced by trend + your own material → platform-tailored drafts → edit, approve, export
@@ -51,8 +49,8 @@ in [DESIGN.md](DESIGN.md).
 | 2. Design pass | Writer's-desk personality, platform accent chips, atom badges, visual polish ✅ |
 | 3. The Brain | Python backend on Railway; IP interpreter + grounded chat; niche radar goes live on real data ✅ |
 | 4. Hands | Editorial engine (pure code, cited rules) + LangChain agent; material ingestion and idea → draft → export both live ✅ |
-| 5. Memory & accounts | Supabase database, sign-in, one creator per user *(next)* |
-| 6. Growth Lead upgrade | Onboarding/Activate, versioned brand book, goals, repurposing, growth reviews, decline-reason lessons |
+| 5. Memory & accounts | Supabase database, sign-in, one creator per user ✅ |
+| 6. Growth Lead upgrade | Onboarding/Activate, versioned brand book, goals, repurposing, growth reviews, decline-reason lessons *(next)* |
 | 7. Workspace | Async runs (research/ingestion/review), threads, staleness supersession |
 | 8. Campaigns | Scheduler with cross-worker claim, scheduled weekly reviews |
 | 9. Evals | Deterministic checks (incl. atom citations resolve) + calibrated LLM judge for voice fidelity; measured improvement |

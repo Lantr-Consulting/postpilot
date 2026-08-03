@@ -1,25 +1,72 @@
 "use client";
 
-import { useState } from "react";
-import { chat as apiChat } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { chat as apiChat, getThreadMessages, getThreads } from "@/lib/api";
+import { useMe } from "@/lib/use-me";
 import { CREATOR, REVIEW, THREADS } from "@/lib/mock";
 import type { ChatMessage } from "@/lib/types";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { useToast } from "@/components/toast";
 import { Card, SectionHeading } from "@/components/ui";
 
+interface ThreadStub {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
 export default function GrowthLeadPage() {
   const toast = useToast();
-  const [threadId, setThreadId] = useState(THREADS[0].id);
+  const { me } = useMe();
+  const signedIn = me !== null;
+
+  const [threadId, setThreadId] = useState<string | null>(THREADS[0].id);
   const [messages, setMessages] = useState<ChatMessage[]>(THREADS[0].messages);
+  const [liveThreads, setLiveThreads] = useState<ThreadStub[] | null>(null);
   const [input, setInput] = useState("");
   const [moves, setMoves] = useState(REVIEW.moves);
 
-  const thread = THREADS.find((t) => t.id === threadId)!;
+  // Signed in: real threads from Supabase replace the mock ones.
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    getThreads()
+      .then((ts) => {
+        if (!alive) return;
+        setLiveThreads(ts);
+        if (ts.length) {
+          setThreadId(ts[0].id);
+          getThreadMessages(ts[0].id).then((ms) => alive && setMessages(ms));
+        } else {
+          setThreadId(null);
+          setMessages([]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
+
+  const threads: ThreadStub[] = liveThreads ?? THREADS;
+  const thread = threads.find((t) => t.id === threadId);
 
   function openThread(id: string) {
     setThreadId(id);
-    setMessages(THREADS.find((t) => t.id === id)!.messages);
+    if (liveThreads) {
+      getThreadMessages(id).then(setMessages).catch(() => {});
+    } else {
+      setMessages(THREADS.find((t) => t.id === id)!.messages);
+    }
+  }
+
+  function newThread() {
+    if (!signedIn) {
+      toast("info", "Sign in to keep threads — this is sample data.");
+      return;
+    }
+    setThreadId(null);
+    setMessages([]);
   }
 
   const [thinking, setThinking] = useState(false);
@@ -36,9 +83,16 @@ export default function GrowthLeadPage() {
       const res = await apiChat({
         message: text,
         history: messages.slice(-10).map((m) => ({ role: m.role, content: m.text })),
-        profile: CREATOR.ipProfile,
+        // Signed in, the server uses the saved brand book; the mock profile
+        // only grounds the signed-out demo.
+        profile: signedIn ? undefined : CREATOR.ipProfile,
+        threadId: signedIn ? threadId : undefined,
       });
       reply = res.reply;
+      if (signedIn && res.threadId && res.threadId !== threadId) {
+        setThreadId(res.threadId);
+        getThreads().then(setLiveThreads).catch(() => {});
+      }
     } catch {
       // Offline → the M1 sample experience stands.
       reply =
@@ -70,11 +124,10 @@ export default function GrowthLeadPage() {
         {/* Chat */}
         <Card className="flex min-h-[420px] flex-col">
           <div className="mb-3 flex items-center justify-between gap-2 border-b border-hairline pb-3">
-            <span className="text-sm font-semibold">{thread.title}</span>
-            <button
-              onClick={() => toast("info", "New threads arrive with the backend at Milestone 3.")}
-              className="btn-ghost px-3 py-1 text-xs"
-            >
+            <span className="text-sm font-semibold">
+              {thread?.title ?? "New thread"}
+            </span>
+            <button onClick={newThread} className="btn-ghost px-3 py-1 text-xs">
               New thread
             </button>
           </div>
@@ -117,8 +170,14 @@ export default function GrowthLeadPage() {
         {/* Right rail */}
         <div className="flex flex-col gap-5">
           <Card title="Goals">
+            {signedIn && me.ipProfile.goals.length === 0 && (
+              <p className="text-xs text-ink-muted">
+                No goals yet — state them when you tell your story in
+                Creator IP, and reviews will hold you to them.
+              </p>
+            )}
             <ul className="flex flex-col gap-2.5">
-              {CREATOR.ipProfile.goals.map((g, i) => (
+              {(signedIn ? me.ipProfile.goals : CREATOR.ipProfile.goals).map((g, i) => (
                 <li key={i} className="rounded-xl bg-surface-2 px-3.5 py-2.5">
                   <p className="text-sm text-ink-2">{g.statement}</p>
                   <p className="mt-0.5 text-[11px] text-ink-muted">{g.horizon}</p>
@@ -171,8 +230,13 @@ export default function GrowthLeadPage() {
           </Card>
 
           <Card title="Threads">
+            {threads.length === 0 && (
+              <p className="text-xs text-ink-muted">
+                No threads yet — say something below.
+              </p>
+            )}
             <ul className="flex flex-col gap-1">
-              {THREADS.map((t) => (
+              {threads.map((t) => (
                 <li key={t.id}>
                   <button
                     onClick={() => openThread(t.id)}

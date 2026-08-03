@@ -1,29 +1,30 @@
-"""PostPilot backend — Milestone 3: The Brain.
+"""PostPilot backend — Milestone 5: Memory & accounts.
 
-The public /trends endpoint over the keyless research sources (the Studio
-niche radar goes live here), plus the two LLM endpoints:
-/interpret-profile (plain English -> the Creator IP brand book) and /chat
-(a Growth Lead grounded in that profile). No database yet — that's
-Milestone 5; the client sends its own context.
+Supabase behind everything: one creator per user, RLS read-own, all writes
+through this backend's service key. The M4 file store is gone; endpoint
+shapes survived. The creator's profile and editorial rules now live
+server-side — clients send tokens, not context.
 """
 
 from __future__ import annotations
 
 import json
 import os
+from datetime import date
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel
 
-load_dotenv()
+load_dotenv()  # must run before auth/db read SUPABASE_* at import time
 
 import agent  # noqa: E402
+import auth  # noqa: E402
+import db  # noqa: E402
 import editorial  # noqa: E402
 import research  # noqa: E402
-import store  # noqa: E402
 
 app = FastAPI(title="PostPilot backend")
 
@@ -43,13 +44,94 @@ llm = (
 )
 MODEL = "deepseek-chat"
 
+# New creators start EMPTY and inactive: tell your story -> review the
+# interpreted brand book -> explicit Activate. The rules ship with teeth on.
+DEFAULTS = {
+    "ipProfile": {
+        "positioning": "",
+        "pillars": [],
+        "backgroundMd": "",
+        "narratives": [],
+        "voice": {"tone": "", "do": [], "dont": [], "catchphrases": []},
+        "audience": "",
+        "goals": [],
+    },
+    "editorialRules": {
+        "bannedPhrases": ["game-changer", "crushing it"],
+        "sponsoredDisclosure": "#ad",
+        "maxHashtags": 4,
+        "maxEmoji": 3,
+    },
+    "platforms": ["x", "linkedin", "instagram", "bluesky"],
+    "niche": {"topics": [], "subreddits": [], "queries": []},
+}
+
 
 @app.get("/health")
 def health():
     return {"ok": True, "llm": llm is not None, "youtube": bool(research.YOUTUBE_KEY)}
 
 
-# ---------- Niche radar (public — the M1 mock rail goes live here) ----------
+def _creator(user: dict) -> dict:
+    return db.ensure_creator(user["id"], user["email"], DEFAULTS)
+
+
+def _require_active(creator: dict) -> None:
+    if not creator["activated"]:
+        raise HTTPException(status_code=403, detail="Activate your Creator IP first — nothing generates until you bless the brand book.")
+    if creator["paused"]:
+        raise HTTPException(status_code=403, detail="PostPilot is paused — resume it in Settings.")
+
+
+# ---------- Account ----------
+
+@app.get("/me")
+def me(user: dict = Depends(auth.current_user)):
+    return {**db.creator_out(_creator(user)), "email": user["email"]}
+
+
+class SettingsRequest(BaseModel):
+    editorialRules: dict | None = None
+    platforms: list[str] | None = None
+    niche: dict | None = None
+    paused: bool | None = None
+
+
+@app.patch("/me/settings")
+def me_settings(req: SettingsRequest, user: dict = Depends(auth.current_user)):
+    _creator(user)
+    fields = {}
+    if req.editorialRules is not None:
+        fields["editorial_rules"] = {
+            "bannedPhrases": [str(p).strip().lower()[:60] for p in req.editorialRules.get("bannedPhrases", [])][:30],
+            "sponsoredDisclosure": str(req.editorialRules.get("sponsoredDisclosure", "#ad"))[:20],
+            "maxHashtags": max(0, min(10, int(req.editorialRules.get("maxHashtags", 4)))),
+            "maxEmoji": max(0, min(10, int(req.editorialRules.get("maxEmoji", 3)))),
+        }
+    if req.platforms is not None:
+        fields["platforms"] = [p for p in req.platforms if p in editorial.PLATFORM_LIMITS][:5]
+    if req.niche is not None:
+        fields["niche"] = {
+            "topics": [str(t)[:60] for t in req.niche.get("topics", [])][:4],
+            "subreddits": [str(s)[:40] for s in req.niche.get("subreddits", [])][:4],
+            "queries": [str(q)[:60] for q in req.niche.get("queries", [])][:4],
+        }
+    if req.paused is not None:
+        fields["paused"] = bool(req.paused)
+    if not fields:
+        raise HTTPException(status_code=400, detail="nothing to update")
+    return db.creator_out(db.update_creator(user["id"], fields))
+
+
+@app.post("/me/activate")
+def me_activate(user: dict = Depends(auth.current_user)):
+    creator = _creator(user)
+    if not creator["ip_profile"].get("positioning"):
+        raise HTTPException(status_code=409, detail="Tell PostPilot your story first — there's no brand book to activate yet.")
+    return db.creator_out(db.update_creator(user["id"], {"activated": True}))
+
+
+# ---------- Niche radar (public) ----------
 
 @app.get("/trends")
 def trends(
@@ -66,11 +148,17 @@ def trends(
     return {"items": items}
 
 
-# ---------- The workspace (file store until Supabase at M5) ----------
+# ---------- The workspace ----------
 
 @app.get("/workspace")
-def get_workspace():
-    return store.workspace()
+def get_workspace(user: dict = Depends(auth.current_user)):
+    _creator(user)
+    return {
+        "materials": [db.material_out(m) for m in db.list_materials(user["id"])],
+        "atoms": [db.atom_out(a) for a in db.list_atoms(user["id"])],
+        "ideas": [db.idea_out(i) for i in db.list_ideas(user["id"])],
+        "drafts": [db.draft_out(d) for d in db.list_drafts(user["id"])],
+    }
 
 
 class MaterialRequest(BaseModel):
@@ -80,78 +168,71 @@ class MaterialRequest(BaseModel):
 
 
 @app.post("/materials")
-def add_material(req: MaterialRequest):
-    row = store.add(
-        "materials",
-        {
-            "id": store.new_id("mat"),
-            "title": req.title.strip()[:120] or "Untitled material",
-            "kind": req.kind if req.kind in ("transcript", "notes", "post", "newsletter", "other") else "other",
-            "addedAt": store.today(),
-            "words": len(req.text.split()),
-            "status": "uploaded",
-            "atomCount": 0,
-            "excerpt": req.text.strip()[:180],
-            "text": req.text.strip()[:60000],
-        },
-    )
-    return {k: v for k, v in row.items() if k != "text"}
-
-
-class ProfilePayload(BaseModel):
-    profile: dict
+def add_material(req: MaterialRequest, user: dict = Depends(auth.current_user)):
+    _creator(user)
+    row = db.create_material(user["id"], {
+        "title": req.title.strip()[:120] or "Untitled material",
+        "kind": req.kind if req.kind in ("transcript", "notes", "post", "newsletter", "other") else "other",
+        "words": len(req.text.split()),
+        "excerpt": req.text.strip()[:180],
+        "body": req.text.strip()[:60000],
+    })
+    return db.material_out(row)
 
 
 @app.post("/materials/{material_id}/ingest")
-def ingest_material(material_id: str, req: ProfilePayload):
+def ingest_material(material_id: str, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="LLM not configured")
-    material = store.get("materials", material_id)
+    creator = _creator(user)
+    _require_active(creator)
+    material = db.get_material(user["id"], material_id)
     if material is None:
         raise HTTPException(status_code=404, detail="material not found")
-    store.update("materials", material_id, {"status": "ingesting"})
-    atoms = agent.mine_material(material, req.profile)
-    store.add_many("atoms", atoms)
-    row = store.update(
-        "materials", material_id, {"status": "mined", "atomCount": len(atoms)}
+    db.update_material(user["id"], material_id, {"status": "ingesting"})
+    mined = agent.mine_material(
+        {"id": material["id"], "title": material["title"], "text": material["body"]},
+        creator["ip_profile"],
     )
-    return {"material": {k: v for k, v in row.items() if k != "text"}, "atoms": atoms}
+    atoms = db.create_atoms(user["id"], material, mined)
+    row = db.update_material(user["id"], material_id, {"status": "mined", "atom_count": len(atoms)})
+    return {"material": db.material_out(row), "atoms": [db.atom_out(a) for a in atoms]}
 
 
 class ResearchRequest(BaseModel):
-    profile: dict
     mission: str | None = None
 
 
 @app.post("/research")
-def run_research(req: ResearchRequest):
+def run_research(req: ResearchRequest, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="LLM not configured")
-    ideas = agent.run_research(req.profile, req.mission)
+    creator = _creator(user)
+    _require_active(creator)
+    profile = {**creator["ip_profile"], "niche": creator["niche"]}
+    ideas = agent.run_research(user["id"], profile, req.mission)
     if not ideas:
         raise HTTPException(status_code=502, detail="the researcher came back empty — try again")
-    store.add_many("ideas", ideas)
-    return {"ideas": ideas}
-
-
-class AcceptIdeaRequest(BaseModel):
-    profile: dict
-    rules: dict
-    platforms: list[str]
+    rows = db.create_ideas(user["id"], ideas)
+    return {"ideas": [db.idea_out(r) for r in rows]}
 
 
 @app.post("/ideas/{idea_id}/accept")
-def accept_idea(idea_id: str, req: AcceptIdeaRequest):
+def accept_idea(idea_id: str, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="LLM not configured")
-    idea = store.get("ideas", idea_id)
+    creator = _creator(user)
+    _require_active(creator)
+    idea = db.get_idea(user["id"], idea_id)
     if idea is None:
         raise HTTPException(status_code=404, detail="idea not found")
-    store.update("ideas", idea_id, {"status": "accepted"})
-    platforms = [p for p in req.platforms if p in editorial.PLATFORM_LIMITS][:5]
-    drafts = agent.draft_variants(idea, req.profile, req.rules, platforms or ["x"])
-    store.add_many("drafts", drafts)
-    return {"drafts": drafts}
+    db.update_idea(user["id"], idea_id, {"status": "accepted"})
+    drafts = agent.draft_variants(
+        user["id"], db.idea_out(idea), creator["ip_profile"],
+        creator["editorial_rules"], creator["platforms"],
+    )
+    rows = db.create_drafts(user["id"], idea, drafts)
+    return {"drafts": [db.draft_out(r) for r in rows]}
 
 
 class DeclineRequest(BaseModel):
@@ -159,75 +240,100 @@ class DeclineRequest(BaseModel):
 
 
 @app.post("/ideas/{idea_id}/decline")
-def decline_idea(idea_id: str, req: DeclineRequest):
-    row = store.update(
-        "ideas", idea_id,
-        {"status": "declined", "feedback": {"reason": req.reason.strip()[:300]}},
-    )
+def decline_idea(idea_id: str, req: DeclineRequest, user: dict = Depends(auth.current_user)):
+    row = db.update_idea(user["id"], idea_id, {"status": "declined", "feedback": {"reason": req.reason.strip()[:300]}})
     if row is None:
         raise HTTPException(status_code=404, detail="idea not found")
-    return row
+    return db.idea_out(row)
 
 
 class DraftEditRequest(BaseModel):
     text: str
-    rules: dict
+
+
+def _recheck(user: dict, draft: dict, text: str, rules: dict) -> list[dict]:
+    return editorial.check_draft(
+        draft["platform"], text, draft["hashtags"], draft["sponsored"],
+        rules, draft["atom_ids"], db.atom_titles(user["id"]), db.shipped_texts(user["id"]),
+    )
 
 
 @app.patch("/drafts/{draft_id}")
-def edit_draft(draft_id: str, req: DraftEditRequest):
-    draft = store.get("drafts", draft_id)
+def edit_draft(draft_id: str, req: DraftEditRequest, user: dict = Depends(auth.current_user)):
+    creator = _creator(user)
+    draft = db.get_draft(user["id"], draft_id)
     if draft is None:
         raise HTTPException(status_code=404, detail="draft not found")
-    checks = editorial.check_draft(
-        draft["platform"], req.text, draft["hashtags"], draft["sponsored"],
-        req.rules, draft["atomIds"], store.atom_titles(), store.shipped_texts(),
-    )
-    return store.update("drafts", draft_id, {"text": req.text[:6000], "checks": checks})
+    checks = _recheck(user, draft, req.text, creator["editorial_rules"])
+    return db.draft_out(db.update_draft(user["id"], draft_id, {"body": req.text[:6000], "checks": checks}))
 
 
 @app.post("/drafts/{draft_id}/approve")
-def approve_draft(draft_id: str, req: DraftEditRequest):
+def approve_draft(draft_id: str, req: DraftEditRequest, user: dict = Depends(auth.current_user)):
     """Approve re-runs the engine on the FINAL text — after any human edit.
     A failing check is a hard veto: 409, with the fresh rows attached."""
-    draft = store.get("drafts", draft_id)
+    creator = _creator(user)
+    draft = db.get_draft(user["id"], draft_id)
     if draft is None:
         raise HTTPException(status_code=404, detail="draft not found")
-    checks = editorial.check_draft(
-        draft["platform"], req.text, draft["hashtags"], draft["sponsored"],
-        req.rules, draft["atomIds"], store.atom_titles(), store.shipped_texts(),
-    )
+    checks = _recheck(user, draft, req.text, creator["editorial_rules"])
     if editorial.blocked(checks):
-        store.update("drafts", draft_id, {"text": req.text[:6000], "checks": checks})
-        raise HTTPException(
-            status_code=409,
-            detail={"message": "The editorial engine blocked this draft.", "checks": checks},
-        )
-    return store.update(
-        "drafts", draft_id,
-        {"text": req.text[:6000], "checks": checks, "status": "approved", "slotDate": store.today()},
-    )
+        db.update_draft(user["id"], draft_id, {"body": req.text[:6000], "checks": checks})
+        raise HTTPException(status_code=409, detail={"message": "The editorial engine blocked this draft.", "checks": checks})
+    db.bump_atom_use(user["id"], draft["atom_ids"])
+    return db.draft_out(db.update_draft(
+        user["id"], draft_id,
+        {"body": req.text[:6000], "checks": checks, "status": "approved",
+         "slot_date": date.today().isoformat()},
+    ))
 
 
 @app.post("/drafts/{draft_id}/decline")
-def decline_draft(draft_id: str, req: DeclineRequest):
-    row = store.update(
-        "drafts", draft_id,
-        {"status": "declined", "feedback": {"reason": req.reason.strip()[:300]}},
-    )
+def decline_draft(draft_id: str, req: DeclineRequest, user: dict = Depends(auth.current_user)):
+    row = db.update_draft(user["id"], draft_id, {"status": "declined", "feedback": {"reason": req.reason.strip()[:300]}})
     if row is None:
         raise HTTPException(status_code=404, detail="draft not found")
-    return row
+    return db.draft_out(row)
 
 
 @app.post("/drafts/{draft_id}/export")
-def export_draft(draft_id: str):
-    draft = store.get("drafts", draft_id)
+def export_draft(draft_id: str, user: dict = Depends(auth.current_user)):
+    draft = db.get_draft(user["id"], draft_id)
     if draft is None:
         raise HTTPException(status_code=404, detail="draft not found")
     if draft["status"] != "approved":
         raise HTTPException(status_code=409, detail="only approved drafts export")
-    return store.update("drafts", draft_id, {"status": "exported"})
+    return db.draft_out(db.update_draft(user["id"], draft_id, {"status": "exported"}))
+
+
+# ---------- Results (self-reported — the loop's measurement path) ----------
+
+class ResultRequest(BaseModel):
+    draftId: str | None = None
+    title: str
+    platform: str
+    postedAt: str
+    metrics: dict
+    notes: str | None = None
+
+
+@app.get("/results")
+def results(user: dict = Depends(auth.current_user)):
+    return {"results": [db.result_out(r) for r in db.list_results(user["id"])]}
+
+
+@app.post("/results")
+def log_result(req: ResultRequest, user: dict = Depends(auth.current_user)):
+    _creator(user)
+    metrics = {k: max(0, int(req.metrics.get(k, 0))) for k in ("views", "likes", "comments", "saves", "follows")}
+    if req.draftId:
+        db.update_draft(user["id"], req.draftId, {"status": "posted"})
+    return db.result_out(db.create_result(user["id"], {
+        "draftId": req.draftId, "title": req.title.strip()[:120],
+        "platform": req.platform if req.platform in editorial.PLATFORM_LIMITS else "x",
+        "postedAt": req.postedAt[:10], "metrics": metrics,
+        "notes": (req.notes or "").strip()[:300] or None,
+    }))
 
 
 # ---------- LLM: the IP interpreter ----------
@@ -252,7 +358,9 @@ Rules:
     dont (3-5 short anti-rules), catchphrases (0-3, only if they used or
     implied them)}),
   audience (one sentence: who this is for, specific),
-  goals (0-3 of {statement, horizon} — only goals they actually stated).
+  goals (0-3 of {statement, horizon} — only goals they actually stated),
+  niche ({topics (2-3 search topics for their niche), subreddits (1-3
+    subreddit names, no r/ prefix), queries (1-2 news search phrases)}).
 - Everything must trace to what they wrote. When unsure, leave it out —
   an empty field beats an invented one.
 - Sharpen their language; do not replace it with generic marketing speak.
@@ -260,7 +368,7 @@ Rules:
 
 
 @app.post("/interpret-profile")
-def interpret_profile(req: InterpretRequest):
+def interpret_profile(req: InterpretRequest, user: dict | None = Depends(auth.optional_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="LLM not configured")
     resp = llm.chat.completions.create(
@@ -276,7 +384,20 @@ def interpret_profile(req: InterpretRequest):
         data = json.loads(resp.choices[0].message.content)
     except (json.JSONDecodeError, TypeError):
         raise HTTPException(status_code=502, detail="interpreter returned non-JSON")
-    return {"profile": _validate_profile(data)}
+    profile = _validate_profile(data)
+    niche = profile.pop("_niche")
+    if user is None:
+        return {"profile": profile}
+    # Signed in: the interpretation IS the new brand book version — saved,
+    # but not active until the user blesses it.
+    creator = _creator(user)
+    row = db.update_creator(user["id"], {
+        "ip_profile": profile,
+        "ip_version": creator["ip_version"] + 1,
+        "niche": niche if any(niche.values()) else creator["niche"],
+        "activated": False,
+    })
+    return {"profile": {**profile, "version": row["ip_version"], "updatedAt": row["updated_at"][:10]}}
 
 
 def _strlist(v, cap_items: int, cap_len: int = 80) -> list[str]:
@@ -309,6 +430,7 @@ def _validate_profile(data: dict) -> dict:
                     "horizon": str(g.get("horizon", "")).strip()[:40],
                 }
             )
+    niche = data.get("niche") or {}
     return {
         "positioning": str(data.get("positioning", "")).strip()[:200],
         "pillars": _strlist(data.get("pillars"), 5, 40),
@@ -322,10 +444,15 @@ def _validate_profile(data: dict) -> dict:
         },
         "audience": str(data.get("audience", "")).strip()[:200],
         "goals": goals,
+        "_niche": {
+            "topics": _strlist(niche.get("topics"), 3, 60),
+            "subreddits": [s.removeprefix("r/") for s in _strlist(niche.get("subreddits"), 3, 40)],
+            "queries": _strlist(niche.get("queries"), 2, 60),
+        },
     }
 
 
-# ---------- LLM: the Growth Lead chat ----------
+# ---------- LLM: the Growth Lead chat (persistent threads when signed in) ----------
 
 class ChatMessage(BaseModel):
     role: str
@@ -336,6 +463,7 @@ class ChatRequest(BaseModel):
     message: str
     history: list[ChatMessage] = []
     profile: dict | None = None
+    threadId: str | None = None
 
 
 CHAT_SYSTEM = """You are PostPilot, the creator's AI Growth Lead — a sharp,
@@ -352,23 +480,32 @@ Hard rules:
   with a disclaimer is still a made-up anecdote; their audience will read
   it as fact. Offer 2-3 pointed questions that would surface the real
   story instead.
-- Never invent metrics, trend data, or platform statistics. Live research
-  tools arrive at Milestone 4; until then say what you'd research, don't
-  fake the result.
+- Never invent metrics, trend data, or platform statistics.
 - Drafts are suggestions — the creator reviews, edits, and posts everything
   themselves. Keep answers concise and practical; no hype words.
 """
 
 
+@app.get("/threads")
+def threads(user: dict = Depends(auth.current_user)):
+    return {"threads": db.list_threads(user["id"])}
+
+
+@app.get("/threads/{thread_id}/messages")
+def thread_messages(thread_id: str, user: dict = Depends(auth.current_user)):
+    return {"messages": db.list_messages(user["id"], thread_id)}
+
+
 @app.post("/chat")
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, user: dict | None = Depends(auth.optional_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="LLM not configured")
+    profile = req.profile
+    if user is not None:
+        profile = _creator(user)["ip_profile"]
     context = ""
-    if req.profile:
-        context = "\n\nCreator IP profile (their blessed brand book):\n" + json.dumps(
-            req.profile
-        )[:4000]
+    if profile:
+        context = "\n\nCreator IP profile (their blessed brand book):\n" + json.dumps(profile)[:4000]
     # The grounding rule is repeated AFTER the context — the last instruction
     # is the one models obey most reliably.
     final_check = (
@@ -386,4 +523,13 @@ def chat(req: ChatRequest):
     resp = llm.chat.completions.create(
         model=MODEL, messages=messages, temperature=0.6, max_tokens=700
     )
-    return {"reply": resp.choices[0].message.content}
+    reply = resp.choices[0].message.content
+
+    thread_id = req.threadId
+    if user is not None:
+        if thread_id is None:
+            thread_id = db.create_thread(user["id"], req.message.strip()[:60] or "New thread")["id"]
+        db.add_message(user["id"], thread_id, "user", req.message.strip())
+        db.add_message(user["id"], thread_id, "assistant", reply)
+        db.touch_thread(user["id"], thread_id)
+    return {"reply": reply, "threadId": thread_id}

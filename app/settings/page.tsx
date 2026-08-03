@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { patchSettings } from "@/lib/api";
+import { useMe } from "@/lib/use-me";
 import { CREATOR } from "@/lib/mock";
 import { PLATFORM_LABEL, type Platform } from "@/lib/types";
 import { useToast } from "@/components/toast";
@@ -10,23 +12,52 @@ const ALL_PLATFORMS: Platform[] = ["x", "linkedin", "instagram", "bluesky", "you
 
 export default function SettingsPage() {
   const toast = useToast();
+  const { me } = useMe();
   const [platforms, setPlatforms] = useState<Platform[]>(CREATOR.platforms);
   const [banned, setBanned] = useState(CREATOR.editorialRules.bannedPhrases);
   const [newPhrase, setNewPhrase] = useState("");
   const [paused, setPaused] = useState(CREATOR.paused);
 
-  function togglePlatform(p: Platform) {
-    setPlatforms((ps) =>
-      ps.includes(p) ? ps.filter((x) => x !== p) : [...ps, p]
+  // Signed in: your saved rules replace the demo creator's. (Deferred a
+  // frame per the React compiler's no-sync-setState-in-effect rule.)
+  useEffect(() => {
+    if (!me) return;
+    const id = requestAnimationFrame(() => {
+      setPlatforms(me.platforms);
+      setBanned(me.editorialRules.bannedPhrases);
+      setPaused(me.paused);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [me]);
+
+  function save(fields: Parameters<typeof patchSettings>[0]) {
+    if (!me) return;
+    patchSettings(fields).catch(() =>
+      toast("error", "Save failed — is the backend up?")
     );
+  }
+
+  function togglePlatform(p: Platform) {
+    const next = platforms.includes(p)
+      ? platforms.filter((x) => x !== p)
+      : [...platforms, p];
+    setPlatforms(next);
+    save({ platforms: next });
     toast("info", "Saved — drafts are tailored to your enabled platforms.");
   }
 
   function addPhrase() {
     const phrase = newPhrase.trim().toLowerCase();
     if (!phrase || banned.includes(phrase)) return;
-    setBanned((b) => [...b, phrase]);
+    const next = [...banned, phrase];
+    setBanned(next);
     setNewPhrase("");
+    save({
+      editorialRules: {
+        ...(me?.editorialRules ?? CREATOR.editorialRules),
+        bannedPhrases: next,
+      },
+    });
     toast("success", `"${phrase}" banned — the engine enforces it, not the prompt.`);
   }
 
@@ -47,7 +78,14 @@ export default function SettingsPage() {
               <button
                 key={p}
                 onClick={() => {
-                  setBanned((b) => b.filter((x) => x !== p));
+                  const next = banned.filter((x) => x !== p);
+                  setBanned(next);
+                  save({
+                    editorialRules: {
+                      ...(me?.editorialRules ?? CREATOR.editorialRules),
+                      bannedPhrases: next,
+                    },
+                  });
                   toast("info", `"${p}" un-banned.`);
                 }}
                 title="Click to remove"
@@ -145,6 +183,7 @@ export default function SettingsPage() {
                 aria-checked={paused}
                 onClick={() => {
                   setPaused(!paused);
+                  save({ paused: !paused });
                   toast(paused ? "success" : "info", paused ? "Resumed." : "Paused — all agent activity stops.");
                 }}
                 className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${

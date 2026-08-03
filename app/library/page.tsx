@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { addMaterial, ingestMaterial } from "@/lib/api";
 import { useWorkspace } from "@/lib/use-workspace";
-import { ATOMS, CREATOR, MATERIALS } from "@/lib/mock";
+import { ATOMS, MATERIALS } from "@/lib/mock";
 import { fmtDate } from "@/lib/format";
 import { useToast } from "@/components/toast";
 import { AtomBadge, Card, SectionHeading } from "@/components/ui";
@@ -44,7 +44,7 @@ export default function LibraryPage() {
     if (!text.trim()) return;
     if (!live) {
       setPasting(false);
-      toast("info", "Backend offline — mining needs the brain. (Sample data)");
+      toast("info", "Sign in to build your own Library — this is sample data.");
       return;
     }
     setMining(true);
@@ -55,14 +55,17 @@ export default function LibraryPage() {
         text,
       });
       await refresh(); // material appears as "uploaded" right away
-      const { atoms: mined } = await ingestMaterial(mat.id, CREATOR.ipProfile);
+      const { atoms: mined } = await ingestMaterial(mat.id);
       await refresh();
       toast("success", `Mined ${mined.length} atoms from “${mat.title}”.`);
       setPasting(false);
       setTitle("");
       setText("");
-    } catch {
-      toast("error", "Mining failed — try again.");
+    } catch (e) {
+      toast(
+        "error",
+        e instanceof Error && e.message.length > 3 ? e.message : "Mining failed — try again."
+      );
     }
     setMining(false);
   }

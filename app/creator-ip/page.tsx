@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { interpretProfile } from "@/lib/api";
+import { activate, interpretProfile } from "@/lib/api";
+import { useMe } from "@/lib/use-me";
 import { CREATOR } from "@/lib/mock";
 import type { IpProfile } from "@/lib/types";
 import { fmtDate } from "@/lib/format";
@@ -16,31 +17,56 @@ const ARC_STYLES: Record<string, string> = {
 
 export default function CreatorIpPage() {
   const toast = useToast();
-  // The interpreted brand book is client state until Supabase (M5).
-  const [profile, setProfile] = useState<IpProfile>(CREATOR.ipProfile);
-  const [story, setStory] = useState(
-    "I'm a physical therapist turned online strength coach. I want to be the person people think of for evidence-based minimalist training — three good hours a week…"
-  );
+  const { me, refresh } = useMe();
+  // Signed out, the brand book is client state over the demo creator.
+  const [localProfile, setLocalProfile] = useState<IpProfile>(CREATOR.ipProfile);
+  const [story, setStory] = useState("");
   const [interpreting, setInterpreting] = useState(false);
-  const p = profile;
+  const [activating, setActivating] = useState(false);
+
+  const signedIn = me !== null;
+  const p = signedIn ? me.ipProfile : localProfile;
+  const activated = signedIn ? me.activated : CREATOR.activated;
+  const empty = signedIn && !p.positioning;
 
   async function interpret() {
     if (interpreting || !story.trim()) return;
     setInterpreting(true);
     try {
       const { profile: fresh } = await interpretProfile(story);
-      setProfile((old) => ({
-        ...fresh,
-        // Keep goals if the model found none — a thin story shouldn't wipe them.
-        goals: fresh.goals.length ? fresh.goals : old.goals,
-        version: old.version + 1,
-        updatedAt: new Date().toISOString().slice(0, 10),
-      }));
+      if (signedIn) {
+        // The server saved it as the next (inactive) version.
+        await refresh();
+      } else {
+        setLocalProfile((old) => ({
+          ...fresh,
+          goals: fresh.goals?.length ? fresh.goals : old.goals,
+          version: old.version + 1,
+          updatedAt: new Date().toISOString().slice(0, 10),
+        }));
+      }
       toast("success", "Interpreted — review the brand book, then Activate.");
     } catch {
       toast("info", "Backend offline — this stays sample data for now.");
     }
     setInterpreting(false);
+  }
+
+  async function bless() {
+    if (!signedIn) {
+      toast("info", "Sign in to activate your own Creator IP. (Sample data)");
+      return;
+    }
+    if (activating) return;
+    setActivating(true);
+    try {
+      await activate();
+      await refresh();
+      toast("success", "Activated — PostPilot now works from this brand book.");
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "Activation failed.");
+    }
+    setActivating(false);
   }
 
   return (
@@ -63,7 +89,8 @@ export default function CreatorIpPage() {
               rows={7}
               value={story}
               onChange={(e) => setStory(e.target.value)}
-              className="mt-3 w-full rounded-lg border border-hairline bg-page p-3 text-sm text-ink"
+              placeholder="I'm a … and I want to be known for … My story is … I talk like …"
+              className="mt-3 w-full rounded-lg border border-hairline bg-page p-3 text-sm text-ink placeholder:text-ink-muted"
             />
             <button
               onClick={interpret}
@@ -87,23 +114,41 @@ export default function CreatorIpPage() {
             </div>
             <div className="mt-2 flex items-center justify-between">
               <span className="text-sm text-ink-2">Active</span>
-              <span className={`text-xs font-medium ${CREATOR.activated ? "text-good" : "text-accent"}`}>
-                {CREATOR.activated ? "Yes — blessed by you" : "Not yet"}
+              <span className={`text-xs font-medium ${activated ? "text-good" : "text-accent"}`}>
+                {activated ? "Yes — blessed by you" : "Not yet"}
               </span>
             </div>
             <button
-              onClick={() =>
-                toast("info", "Already active. Edits create a new version to review.")
-              }
-              className="btn-ghost mt-4 w-full px-3.5 py-2 text-sm"
+              onClick={bless}
+              disabled={activating}
+              className={`mt-4 w-full px-3.5 py-2 text-sm ${activated ? "btn-ghost" : "btn-primary"}`}
             >
-              {CREATOR.activated ? "Re-activate after edits" : "Activate"}
+              {activating
+                ? "Activating…"
+                : activated
+                  ? "Re-activate after edits"
+                  : "Activate"}
             </button>
+            {!activated && (
+              <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+                Nothing generates until you bless the brand book — the agent
+                works only from what you&apos;ve approved.
+              </p>
+            )}
           </Card>
         </div>
 
         {/* Brand book */}
         <div className="flex flex-col gap-5">
+          {empty && (
+            <Card>
+              <p className="font-display text-[17px] leading-[28px] text-ink">
+                Your brand book is blank. Tell PostPilot your story on the
+                left — it interprets, you review, and nothing runs until you
+                activate.
+              </p>
+            </Card>
+          )}
           <Card title="Positioning">
             <p className="font-display text-[19px] leading-[30px] text-ink">
               {p.positioning}

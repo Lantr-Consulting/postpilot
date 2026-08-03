@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CREATOR } from "@/lib/mock";
+import { supabase } from "@/lib/supabase";
 
 function Icon({ children }: { children: ReactNode }) {
   return (
@@ -175,12 +176,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="mt-auto flex flex-col gap-3 px-3">
-        <div className="rounded-lg border border-hairline px-3 py-2">
-          <div className="truncate text-xs font-medium">{CREATOR.name}</div>
-          <div className="mt-0.5 text-xs text-ink-muted">
-            {CREATOR.handle} · demo creator
-          </div>
-        </div>
+        <AccountBox />
         <div className="text-[11px] leading-relaxed text-ink-muted">
           A Lantr sample project.
           <br />
@@ -188,6 +184,53 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+  );
+}
+
+function AccountBox() {
+  const [email, setEmail] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setEmail(data.session?.user.email ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setEmail(session?.user.email ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (email === undefined) return null;
+
+  if (email === null) {
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="rounded-lg border border-hairline px-3 py-2">
+          <div className="truncate text-xs font-medium">{CREATOR.name}</div>
+          <div className="mt-0.5 text-xs text-ink-muted">
+            {CREATOR.handle} · demo creator
+          </div>
+        </div>
+        <Link
+          href="/signin"
+          className="btn-ghost px-3 py-2 text-center text-sm font-medium"
+        >
+          Sign in
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-hairline px-3 py-2">
+      <div className="truncate text-xs font-medium">{email}</div>
+      <button
+        onClick={() => supabase.auth.signOut().then(() => window.location.assign("/"))}
+        className="mt-0.5 text-xs text-ink-muted hover:text-ink"
+      >
+        Sign out
+      </button>
+    </div>
   );
 }
 

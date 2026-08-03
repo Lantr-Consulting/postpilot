@@ -8,15 +8,16 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
+import db
 import editorial
 import research
-import store
 
 _llm = ChatOpenAI(
     model="deepseek-chat",
@@ -58,34 +59,39 @@ def get_google_trending(unused: str = "") -> str:
     return _tool_result(research.google_trends(limit=5))
 
 
-@tool
-def search_library(query: str) -> str:
-    """Search the creator's own mined content atoms (their stories, takes,
-    lessons, quotes, stats) by keyword. Personal material MUST come from
-    here — never invent it."""
-    q = query.lower()
-    atoms = [
-        a
-        for a in store.workspace()["atoms"]
-        if q in a["text"].lower() or any(q in p.lower() for p in a["pillars"])
-    ]
-    if not atoms:
-        atoms = store.workspace()["atoms"]  # small corpus: show everything
-    return json.dumps(
-        [
-            {"atomId": a["id"], "kind": a["kind"], "text": a["text"], "pillars": a["pillars"]}
-            for a in atoms[:10]
+def _make_library_tool(user_id: str):
+    @tool
+    def search_library(query: str) -> str:
+        """Search the creator's own mined content atoms (their stories,
+        takes, lessons, quotes, stats) by keyword. Personal material MUST
+        come from here — never invent it."""
+        q = query.lower()
+        everything = [db.atom_out(a) for a in db.list_atoms(user_id)]
+        atoms = [
+            a
+            for a in everything
+            if q in a["text"].lower() or any(q in p.lower() for p in a["pillars"])
         ]
-    )
+        if not atoms:
+            atoms = everything  # small corpus: show everything
+        return json.dumps(
+            [
+                {"atomId": a["id"], "kind": a["kind"], "text": a["text"], "pillars": a["pillars"]}
+                for a in atoms[:10]
+            ]
+        )
+
+    return search_library
 
 
-RESEARCH_TOOLS = [
-    search_niche_social,
-    search_niche_news,
-    get_subreddit_hot,
-    get_google_trending,
-    search_library,
-]
+def _research_tools(user_id: str) -> list:
+    return [
+        search_niche_social,
+        search_niche_news,
+        get_subreddit_hot,
+        get_google_trending,
+        _make_library_tool(user_id),
+    ]
 
 _RESEARCH_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -116,14 +122,15 @@ Ideas must fit the creator's pillars and voice. No reaction/dunk content
 unless their profile asks for it."""
 
 
-def run_research(profile: dict, mission: str | None = None) -> list[dict]:
+def run_research(user_id: str, profile: dict, mission: str | None = None) -> list[dict]:
     """Research run: agent scans the niche with tools, then a JSON pass
     shapes ideas. Returns proposed idea rows (not yet stored)."""
-    agent = create_tool_calling_agent(_llm, RESEARCH_TOOLS, _RESEARCH_PROMPT)
+    tools = _research_tools(user_id)
+    agent = create_tool_calling_agent(_llm, tools, _RESEARCH_PROMPT)
     executor = AgentExecutor(
-        agent=agent, tools=RESEARCH_TOOLS, max_iterations=6, return_intermediate_steps=True
+        agent=agent, tools=tools, max_iterations=6, return_intermediate_steps=True
     )
-    lessons = store.decline_lessons()
+    lessons = db.decline_lessons(user_id)
     task = mission or (
         "Scan the niche for what's moving this week and find 3-4 content "
         "opportunities for this creator."
@@ -160,8 +167,8 @@ def run_research(profile: dict, mission: str | None = None) -> list[dict]:
     except (json.JSONDecodeError, TypeError):
         return []
 
-    known_atoms = store.atom_titles()
-    run_id = store.new_id("run")
+    known_atoms = db.atom_titles(user_id)
+    run_id = f"run-{uuid.uuid4().hex[:8]}"
     rows = []
     for i in (data.get("ideas") or [])[:4]:
         if not isinstance(i, dict) or not str(i.get("title", "")).strip():
@@ -182,13 +189,11 @@ def run_research(profile: dict, mission: str | None = None) -> list[dict]:
             )
         rows.append(
             {
-                "id": store.new_id("idea"),
                 "title": str(i["title"])[:120],
                 "angle": str(i.get("angle", ""))[:300],
                 "pillar": str(i.get("pillar", ""))[:40],
                 "rationale": str(i.get("rationale", ""))[:400],
                 "evidence": evidence,
-                "status": "proposed",
                 "runId": run_id,
             }
         )
@@ -234,9 +239,6 @@ def mine_material(material: dict, profile: dict) -> list[dict]:
             continue
         rows.append(
             {
-                "id": store.new_id("atom"),
-                "materialId": material["id"],
-                "materialTitle": material["title"],
                 "kind": a.get("kind") if a.get("kind") in ("story", "take", "lesson", "quote", "stat") else "take",
                 "text": str(a["text"])[:400],
                 "pillars": [p for p in a.get("pillars", []) if p in pillars][:3] or list(pillars)[:1],
@@ -258,12 +260,12 @@ write without personal claims. Hashtags only where the platform culture
 expects them, within the creator's cap. Do not mark anything sponsored."""
 
 
-def draft_variants(idea: dict, profile: dict, rules: dict, platforms: list[str]) -> list[dict]:
+def draft_variants(user_id: str, idea: dict, profile: dict, rules: dict, platforms: list[str]) -> list[dict]:
     """Generation: idea -> per-platform drafts, each checked by the engine.
     One refinement pass: failing drafts go back with their check rows."""
-    atoms = [a for a in store.workspace()["atoms"] if a["id"] in {e.get("atomId") for e in idea["evidence"]}]
-    if not atoms:
-        atoms = store.workspace()["atoms"][:6]
+    everything = [db.atom_out(a) for a in db.list_atoms(user_id)]
+    cited = {e.get("atomId") for e in idea["evidence"]}
+    atoms = [a for a in everything if a["id"] in cited] or everything[:6]
     limits = {p: editorial.PLATFORM_LIMITS[p][0] for p in platforms if p in editorial.PLATFORM_LIMITS}
 
     def generate(feedback: str | None) -> list[dict]:
@@ -285,8 +287,8 @@ def draft_variants(idea: dict, profile: dict, rules: dict, platforms: list[str])
         except (json.JSONDecodeError, TypeError):
             return []
 
-    known_atoms = store.atom_titles()
-    past = store.shipped_texts()
+    known_atoms = db.atom_titles(user_id)
+    past = db.shipped_texts(user_id)
 
     def check(d: dict) -> list[dict]:
         return editorial.check_draft(
@@ -319,17 +321,12 @@ def draft_variants(idea: dict, profile: dict, rules: dict, platforms: list[str])
     for d, checks in checked:
         rows.append(
             {
-                "id": store.new_id("draft"),
-                "ideaId": idea["id"],
-                "ideaTitle": idea["title"],
                 "platform": d["platform"],
                 "text": str(d.get("text", ""))[:6000],
                 "hashtags": [str(h)[:40] for h in d.get("hashtags", [])][:8],
                 "sponsored": bool(d.get("sponsored")),
                 "atomIds": [a for a in d.get("atomIds", []) if a in known_atoms],
                 "checks": checks,
-                "status": "draft",
-                "slotDate": None,
             }
         )
     return rows
