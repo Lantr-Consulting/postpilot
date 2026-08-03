@@ -9,7 +9,9 @@ import {
   editDraft,
   exportDraft,
   getTrends,
+  pollRun,
   runResearch,
+  steerRun,
 } from "@/lib/api";
 import { useWorkspace } from "@/lib/use-workspace";
 import { ATOMS, CREATOR, DRAFTS, IDEAS, TRENDS } from "@/lib/mock";
@@ -51,6 +53,9 @@ export default function StudioPage() {
 
   const [editing, setEditing] = useState<string | null>(null);
   const [researching, setResearching] = useState(false);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [runProgress, setRunProgress] = useState("");
+  const [steerNote, setSteerNote] = useState("");
   const [draftingIdea, setDraftingIdea] = useState<string | null>(null);
   const [busyDraft, setBusyDraft] = useState<string | null>(null);
 
@@ -73,14 +78,35 @@ export default function StudioPage() {
       return;
     }
     setResearching(true);
+    setRunProgress("Claiming the run…");
     try {
-      const { ideas: fresh } = await runResearch();
+      const run = await runResearch();
+      setRunId(run.id);
+      const done = await pollRun(run.id, (r) => setRunProgress(r.progress || "Working…"));
       await refresh();
-      toast("success", `${fresh.length} ideas proposed — evidence attached.`);
+      if (done.status === "done") {
+        toast("success", done.report ?? "Research done.");
+      } else {
+        toast("error", done.report ?? "The run failed — try again.");
+      }
     } catch (e) {
-      toast("error", apiMessage(e, "The researcher came back empty. Try again in a minute."));
+      toast("error", apiMessage(e, "Couldn't start the run."));
     }
     setResearching(false);
+    setRunId(null);
+    setRunProgress("");
+  }
+
+  async function sendSteer() {
+    const note = steerNote.trim();
+    if (!note || !runId) return;
+    setSteerNote("");
+    try {
+      await steerRun(runId, note);
+      toast("info", "Steering noted — the run reads it before shaping ideas.");
+    } catch {
+      toast("info", "Too late — that run already finished.");
+    }
   }
 
   async function decideIdea(id: string, status: "accepted" | "declined") {
@@ -197,10 +223,30 @@ export default function StudioPage() {
                 disabled={researching}
                 className="btn-primary px-3.5 py-1.5 text-xs"
               >
-                {researching ? "Researching your niche… ~1 min" : "Run research"}
+                {researching ? "Running…" : "Run research"}
               </button>
             }
           >
+            {researching && (
+              <div className="index-card mb-4 rounded-xl p-3.5">
+                <p className="flex items-center gap-2 text-xs text-ink-2">
+                  <span aria-hidden className="inline-block size-2 animate-pulse rounded-full bg-accent" />
+                  {runProgress || "Working…"}
+                </p>
+                <div className="mt-2.5 flex gap-2">
+                  <input
+                    value={steerNote}
+                    onChange={(e) => setSteerNote(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && sendSteer()}
+                    placeholder='Steer it mid-run — "focus on the newsletter angle"'
+                    className="flex-1 rounded-full border border-hairline bg-page px-3.5 py-1.5 text-xs text-ink placeholder:text-ink-muted"
+                  />
+                  <button onClick={sendSteer} className="btn-ghost px-3 py-1.5 text-xs">
+                    Steer
+                  </button>
+                </div>
+              </div>
+            )}
             {ideas.length === 0 ? (
               <p className="text-sm text-ink-muted">
                 No ideas yet. Run research — the agent scans your niche and

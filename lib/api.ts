@@ -120,7 +120,7 @@ export function getReviews(): Promise<Review[]> {
   return req<{ reviews: Review[] }>("/reviews").then((r) => r.reviews);
 }
 
-export function runReview(): Promise<Review> {
+export function runReview(): Promise<Run> {
   return req("/reviews/run", { method: "POST" });
 }
 
@@ -202,18 +202,54 @@ export function addMaterial(args: {
   return req("/materials", { method: "POST", body: JSON.stringify(args) });
 }
 
-export function ingestMaterial(
-  id: string
-): Promise<{ material: Material; atoms: Atom[] }> {
+// ---------- Async runs: start, poll, steer ----------
+
+export interface Run {
+  id: string;
+  kind: "research" | "ingestion" | "repurpose" | "review";
+  status: "queued" | "running" | "done" | "failed";
+  progress: string;
+  steer: string[];
+  report: string | null;
+  materialId: string | null;
+}
+
+export function ingestMaterial(id: string): Promise<Run> {
   return req(`/materials/${id}/ingest`, { method: "POST" });
 }
 
-export function repurposeMaterial(id: string): Promise<{ ideas: Idea[] }> {
+export function repurposeMaterial(id: string): Promise<Run> {
   return req(`/materials/${id}/repurpose`, { method: "POST" });
 }
 
-export function runResearch(mission?: string): Promise<{ ideas: Idea[] }> {
+export function runResearch(mission?: string): Promise<Run> {
   return req("/research", { method: "POST", body: JSON.stringify({ mission }) });
+}
+
+export function getRun(id: string): Promise<Run> {
+  return req(`/runs/${id}`);
+}
+
+export function getLiveRun(): Promise<Run | null> {
+  return req<{ run: Run | null }>("/runs/live").then((r) => r.run);
+}
+
+export function steerRun(id: string, note: string): Promise<Run> {
+  return req(`/runs/${id}/steer`, { method: "POST", body: JSON.stringify({ note }) });
+}
+
+// Poll a run to completion. onTick sees every poll (progress display);
+// resolves with the terminal run — check status for done vs failed.
+export async function pollRun(
+  id: string,
+  onTick?: (run: Run) => void
+): Promise<Run> {
+  for (;;) {
+    const run = await getRun(id);
+    onTick?.(run);
+    if (run.status === "done" || run.status === "failed") return run;
+    await new Promise((r) => setTimeout(r, 2500));
+  }
 }
 
 export function acceptIdea(id: string): Promise<{ drafts: Draft[] }> {

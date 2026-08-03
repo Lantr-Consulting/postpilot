@@ -131,9 +131,20 @@ def _standing_lessons(user_id: str, profile: dict) -> str:
     return "\n".join(f"- {r}" for r in lessons) or "(none yet)"
 
 
-def run_research(user_id: str, profile: dict, mission: str | None = None) -> list[dict]:
+def run_research(
+    user_id: str,
+    profile: dict,
+    mission: str | None = None,
+    on_progress=None,
+    get_steer=None,
+) -> list[dict]:
     """Research run: agent scans the niche with tools, then a JSON pass
-    shapes ideas. Returns proposed idea rows (not yet stored)."""
+    shapes ideas. Steering notes that arrive during the tool phase are read
+    before shaping — genuine mid-run steering. Returns idea rows."""
+    def progress(msg: str):
+        if on_progress:
+            on_progress(msg)
+
     tools = _research_tools(user_id)
     agent = create_tool_calling_agent(_llm, tools, _RESEARCH_PROMPT)
     executor = AgentExecutor(
@@ -143,6 +154,10 @@ def run_research(user_id: str, profile: dict, mission: str | None = None) -> lis
         "Scan the niche for what's moving this week and find 3-4 content "
         "opportunities for this creator."
     )
+    steer_at_start = list(get_steer()) if get_steer else []
+    if steer_at_start:
+        task += "\n\nSteering from the creator (obey): " + "; ".join(steer_at_start)
+    progress("Scanning your niche and your Library…")
     result = executor.invoke(
         {
             "profile": json.dumps(profile)[:3000],
@@ -150,11 +165,16 @@ def run_research(user_id: str, profile: dict, mission: str | None = None) -> lis
             "task": task,
         }
     )
+    progress("Shaping ideas from what the tools found…")
     # Evidence trail: what the tools actually returned, capped.
     trail = []
     for action, observation in result.get("intermediate_steps", []):
         trail.append({"tool": action.tool, "input": action.tool_input, "result": str(observation)[:1500]})
 
+    # Mid-run steering: anything the creator said while the tools ran lands
+    # here, in the pass that decides what the ideas actually are.
+    steer_now = list(get_steer()) if get_steer else []
+    fresh_steer = [s for s in steer_now if s not in steer_at_start]
     shape = _llm.bind(response_format={"type": "json_object"})
     ideas_raw = shape.invoke(
         [
@@ -163,6 +183,12 @@ def run_research(user_id: str, profile: dict, mission: str | None = None) -> lis
                 "role": "user",
                 "content": "Creator profile:\n"
                 + json.dumps(profile)[:2000]
+                + (
+                    "\n\nMid-run steering from the creator (obey when shaping):\n- "
+                    + "\n- ".join(fresh_steer)
+                    if fresh_steer
+                    else ""
+                )
                 + "\n\nResearch summary:\n"
                 + str(result.get("output", ""))[:3000]
                 + "\n\nRaw tool results:\n"

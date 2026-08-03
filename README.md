@@ -15,23 +15,21 @@ A Lantr sample project, built in the same order a student builds theirs.
 
 **Live:** https://postpilot-drab-seven.vercel.app
 
-## Status: Milestone 6 — The Growth Lead upgrade
+## Status: Milestone 7 — Workspace
 
-The thesis milestone: the creator teaches the agent, and the teaching is
-versioned. The brand book now has **history** — every interpretation,
-restore, and accepted review move snapshots the old version (restoring
-makes a new version and needs re-blessing; history never rewrites).
-**Growth reviews are real runs**: goals, pillar coverage, platform mix,
-and your logged results go in; a grounded summary and 2-3 strategy moves
-come out — and an accepted move writes its lesson into the brand book as
-a **standing instruction** the agent obeys in every research and drafting
-run. **Repurposing** cuts a mined material into Studio ideas that each
-cite their atom (an idea with no real atom is dropped by code). Research
-tags ideas to your **narrative arcs** (invented arc names get dropped),
-Performance logs real results against exported drafts, and
-`test_prompts.py` pins every load-bearing prompt sentence so prompt drift
-fails the suite instead of silently shipping. Full design in
-[DESIGN.md](DESIGN.md).
+The agent's work went async. Research, mining, repurposing, and reviews now
+run in background threads: the client gets a run id back immediately and
+polls `pp_runs` for live progress ("Scanning your niche…", "Shaping
+ideas…"). You can **steer a run mid-flight** — notes sent while the tools
+are scanning are read before the ideas get shaped. A fresh research run
+**supersedes** still-pending ideas from older runs, so last week's trends
+don't sit in the Studio looking current. And the per-user run lock lives in
+the database — a partial unique index makes the INSERT the claim, arbitrated
+by Postgres across both uvicorn workers (an in-memory lock dies with 2
+workers; runs orphaned by a restart are failed and reclaimed after 10
+minutes). Verified live: a second run while one is running gets a 409.
+
+Full design in [DESIGN.md](DESIGN.md).
 
 - **Today** — calendar strip, pipeline counts, streak, latest Growth Lead insight
 - **Studio** — niche radar → idea cards evidenced by trend + your own material → platform-tailored drafts → edit, approve, export
@@ -54,8 +52,8 @@ fails the suite instead of silently shipping. Full design in
 | 4. Hands | Editorial engine (pure code, cited rules) + LangChain agent; material ingestion and idea → draft → export both live ✅ |
 | 5. Memory & accounts | Supabase database, sign-in, one creator per user ✅ |
 | 6. Growth Lead upgrade | Onboarding/Activate, versioned brand book, goals, repurposing, growth reviews, decline-reason lessons ✅ |
-| 7. Workspace | Async runs (research/ingestion/review), threads, staleness supersession *(next)* |
-| 8. Campaigns | Scheduler with cross-worker claim, scheduled weekly reviews |
+| 7. Workspace | Async runs (research/ingestion/review), threads, staleness supersession ✅ |
+| 8. Campaigns | Scheduler with cross-worker claim, scheduled weekly reviews *(next)* |
 | 9. Evals | Deterministic checks (incl. atom citations resolve) + calibrated LLM judge for voice fidelity; measured improvement |
 | 10. Polish + Blueprint | Product polish, BLUEPRINT.md demo package, BUILD_GUIDE.md |
 

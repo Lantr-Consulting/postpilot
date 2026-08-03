@@ -98,6 +98,84 @@ def update_creator(user_id: str, fields: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Runs — the async workhorses. The pp_runs_one_live partial unique index is
+# the per-user lock: the INSERT is the claim, and Postgres arbitrates across
+# workers. An in-memory lock dies with 2 uvicorn workers; this doesn't.
+# ---------------------------------------------------------------------------
+
+STALE_RUN_SECONDS = 600
+
+
+def run_out(row: dict) -> dict:
+    return {
+        "id": row["id"], "kind": row["kind"], "status": row["status"],
+        "progress": row["progress"], "steer": row["steer"],
+        "report": row.get("report"), "materialId": row.get("material_id"),
+        "createdAt": row["created_at"], "updatedAt": row["updated_at"],
+    }
+
+
+def live_run(user_id: str) -> dict | None:
+    rows = _rest("GET", "pp_runs",
+                 params={"user_id": f"eq.{user_id}",
+                         "status": "in.(queued,running)", "limit": 1})
+    return rows[0] if rows else None
+
+
+def claim_run(user_id: str, kind: str, material_id: str | None = None) -> dict | None:
+    """Insert-as-claim. Returns the run row, or None if another live run
+    holds the lock. A run orphaned by a restart (no heartbeat for 10 min)
+    is failed and the claim retried once."""
+    body = {"user_id": user_id, "kind": kind, "material_id": material_id}
+    for attempt in (1, 2):
+        try:
+            return _rest("POST", "pp_runs", json=body, extra_headers=_REPR)[0]
+        except http.HTTPError:
+            stale = live_run(user_id)
+            if stale is None:
+                continue  # lost a race that then finished — retry once
+            age = (datetime.now(timezone.utc)
+                   - datetime.fromisoformat(stale["updated_at"])).total_seconds()
+            if attempt == 1 and age > STALE_RUN_SECONDS:
+                update_run(user_id, stale["id"],
+                           {"status": "failed", "report": "orphaned by a restart"})
+                continue
+            return None
+    return None
+
+
+def get_run(user_id: str, run_id: str) -> dict | None:
+    rows = _rest("GET", "pp_runs",
+                 params={"user_id": f"eq.{user_id}", "id": f"eq.{run_id}", "limit": 1})
+    return rows[0] if rows else None
+
+
+def update_run(user_id: str, run_id: str, fields: dict) -> dict | None:
+    fields = {**fields, "updated_at": _now()}
+    rows = _rest("PATCH", "pp_runs",
+                 params={"user_id": f"eq.{user_id}", "id": f"eq.{run_id}"},
+                 json=fields, extra_headers=_REPR)
+    return rows[0] if rows else None
+
+
+def add_steer(user_id: str, run_id: str, note: str) -> dict | None:
+    run = get_run(user_id, run_id)
+    if run is None or run["status"] not in ("queued", "running"):
+        return None
+    return update_run(user_id, run_id, {"steer": run["steer"] + [note[:300]]})
+
+
+def supersede_stale_ideas(user_id: str, keep_run_id: str) -> int:
+    """A fresh research run supersedes still-pending ideas from older runs —
+    last week's trends don't get to sit in the Studio looking current."""
+    rows = _rest("PATCH", "pp_ideas",
+                 params={"user_id": f"eq.{user_id}", "status": "eq.proposed",
+                         "run_id": f"neq.{keep_run_id}"},
+                 json={"status": "superseded"}, extra_headers=_REPR)
+    return len(rows or [])
+
+
+# ---------------------------------------------------------------------------
 # Profile versions — every interpretation or amendment snapshots the old book
 # ---------------------------------------------------------------------------
 

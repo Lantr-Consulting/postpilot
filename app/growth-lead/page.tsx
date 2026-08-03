@@ -7,6 +7,7 @@ import {
   getReviews,
   getThreadMessages,
   getThreads,
+  pollRun,
   runReview,
   type Review,
 } from "@/lib/api";
@@ -40,6 +41,8 @@ export default function GrowthLeadPage() {
     };
   }, [signedIn]);
 
+  const [reviewProgress, setReviewProgress] = useState("");
+
   async function startReview() {
     if (!signedIn) {
       toast("info", "Sign in to run a real review — this is sample data.");
@@ -47,13 +50,19 @@ export default function GrowthLeadPage() {
     }
     setReviewing(true);
     try {
-      const review = await runReview();
-      setLiveReviews((rs) => [review, ...(rs ?? [])]);
-      toast("success", "Review done — decide on its moves below.");
+      const run = await runReview();
+      const done = await pollRun(run.id, (r) => setReviewProgress(r.progress || "Working…"));
+      if (done.status === "done") {
+        setLiveReviews(await getReviews());
+        toast("success", "Review done — decide on its moves below.");
+      } else {
+        toast("error", done.report ?? "Review failed — try again.");
+      }
     } catch (e) {
       toast("error", e instanceof Error ? e.message : "Review failed — try again.");
     }
     setReviewing(false);
+    setReviewProgress("");
   }
 
   async function decideLiveMove(review: Review, index: number, accept: boolean) {
@@ -249,6 +258,12 @@ export default function GrowthLeadPage() {
               </button>
             }
           >
+            {reviewing && (
+              <p className="mb-3 flex items-center gap-2 text-xs text-ink-2">
+                <span aria-hidden className="inline-block size-2 animate-pulse rounded-full bg-accent" />
+                {reviewProgress || "Working…"}
+              </p>
+            )}
             {signedIn && liveReviews !== null ? (
               liveReviews.length === 0 ? (
                 <p className="text-xs text-ink-muted">

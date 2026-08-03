@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { addMaterial, ingestMaterial, repurposeMaterial } from "@/lib/api";
+import { addMaterial, ingestMaterial, pollRun, repurposeMaterial } from "@/lib/api";
 import { useWorkspace } from "@/lib/use-workspace";
 import { ATOMS, MATERIALS } from "@/lib/mock";
 import { fmtDate } from "@/lib/format";
@@ -56,12 +56,17 @@ export default function LibraryPage() {
         text,
       });
       await refresh(); // material appears as "uploaded" right away
-      const { atoms: mined } = await ingestMaterial(mat.id);
+      const run = await ingestMaterial(mat.id); // async: poll to completion
+      const done = await pollRun(run.id, () => refresh());
       await refresh();
-      toast("success", `Mined ${mined.length} atoms from “${mat.title}”.`);
-      setPasting(false);
-      setTitle("");
-      setText("");
+      if (done.status === "done") {
+        toast("success", done.report ?? "Mined.");
+        setPasting(false);
+        setTitle("");
+        setText("");
+      } else {
+        toast("error", done.report ?? "Mining failed — try again.");
+      }
     } catch (e) {
       toast(
         "error",
@@ -181,10 +186,14 @@ export default function LibraryPage() {
                           if (repurposing) return;
                           setRepurposing(m.id);
                           try {
-                            const { ideas } = await repurposeMaterial(m.id);
+                            const run = await repurposeMaterial(m.id);
+                            const done = await pollRun(run.id);
                             toast(
-                              "success",
-                              `${ideas.length} ideas cut from “${m.title}” — they're in the Studio.`
+                              done.status === "done" ? "success" : "error",
+                              done.report ??
+                                (done.status === "done"
+                                  ? "Ideas are in the Studio."
+                                  : "Repurposing failed — try again.")
                             );
                           } catch (e) {
                             toast(

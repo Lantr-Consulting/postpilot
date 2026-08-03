@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from datetime import date
 
 from dotenv import load_dotenv
@@ -153,6 +154,68 @@ def me_restore_version(version: int, user: dict = Depends(auth.current_user)):
     return db.creator_out(row)
 
 
+# ---------- Async runs: claim in the DB, work in a thread, poll to watch ----------
+
+def _start_run(user: dict, kind: str, worker, material_id: str | None = None) -> dict:
+    """Claim the per-user lock (a pp_runs insert) and hand the work to a
+    background thread. The client gets the run row back immediately and
+    polls /runs/{id}; progress and steering live in the row."""
+    run = db.claim_run(user["id"], kind, material_id)
+    if run is None:
+        raise HTTPException(
+            status_code=409,
+            detail="The Growth Lead is mid-run — steer it, or wait for it to finish.",
+        )
+    run_id = run["id"]
+    user_id = user["id"]
+
+    def progress(msg: str):
+        db.update_run(user_id, run_id, {"progress": msg[:200]})
+
+    def get_steer() -> list[str]:
+        row = db.get_run(user_id, run_id)
+        return row["steer"] if row else []
+
+    def wrapped():
+        db.update_run(user_id, run_id, {"status": "running"})
+        try:
+            report = worker(progress, get_steer)
+            db.update_run(user_id, run_id, {"status": "done", "progress": "", "report": report[:500]})
+        except Exception as e:  # a failed run must release the lock, always
+            db.update_run(user_id, run_id, {"status": "failed", "progress": "", "report": str(e)[:500]})
+
+    threading.Thread(target=wrapped, daemon=True).start()
+    return db.run_out(run)
+
+
+@app.get("/runs/live")
+def runs_live(user: dict = Depends(auth.current_user)):
+    run = db.live_run(user["id"])
+    return {"run": db.run_out(run) if run else None}
+
+
+@app.get("/runs/{run_id}")
+def run_status(run_id: str, user: dict = Depends(auth.current_user)):
+    run = db.get_run(user["id"], run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return db.run_out(run)
+
+
+class SteerRequest(BaseModel):
+    note: str
+
+
+@app.post("/runs/{run_id}/steer")
+def steer_run(run_id: str, req: SteerRequest, user: dict = Depends(auth.current_user)):
+    if not req.note.strip():
+        raise HTTPException(status_code=400, detail="empty steering note")
+    run = db.add_steer(user["id"], run_id, req.note.strip())
+    if run is None:
+        raise HTTPException(status_code=409, detail="that run already finished")
+    return db.run_out(run)
+
+
 # ---------- Niche radar (public) ----------
 
 @app.get("/trends")
@@ -211,14 +274,24 @@ def ingest_material(material_id: str, user: dict = Depends(auth.current_user)):
     material = db.get_material(user["id"], material_id)
     if material is None:
         raise HTTPException(status_code=404, detail="material not found")
-    db.update_material(user["id"], material_id, {"status": "ingesting"})
-    mined = agent.mine_material(
-        {"id": material["id"], "title": material["title"], "text": material["body"]},
-        creator["ip_profile"],
-    )
-    atoms = db.create_atoms(user["id"], material, mined)
-    row = db.update_material(user["id"], material_id, {"status": "mined", "atom_count": len(atoms)})
-    return {"material": db.material_out(row), "atoms": [db.atom_out(a) for a in atoms]}
+    user_id = user["id"]
+
+    def worker(progress, get_steer):
+        progress(f"Mining “{material['title']}” for atoms…")
+        db.update_material(user_id, material_id, {"status": "ingesting"})
+        try:
+            mined = agent.mine_material(
+                {"id": material["id"], "title": material["title"], "text": material["body"]},
+                creator["ip_profile"],
+            )
+            atoms = db.create_atoms(user_id, material, mined)
+            db.update_material(user_id, material_id, {"status": "mined", "atom_count": len(atoms)})
+            return f"Mined {len(atoms)} atoms from “{material['title']}”."
+        except Exception:
+            db.update_material(user_id, material_id, {"status": "uploaded"})
+            raise
+
+    return _start_run(user, "ingestion", worker, material_id=material_id)
 
 
 @app.post("/materials/{material_id}/repurpose")
@@ -232,11 +305,17 @@ def repurpose_material(material_id: str, user: dict = Depends(auth.current_user)
         raise HTTPException(status_code=404, detail="material not found")
     if material["status"] != "mined":
         raise HTTPException(status_code=409, detail="mine this material first")
-    ideas = agent.repurpose_material(user["id"], material, creator["ip_profile"])
-    if not ideas:
-        raise HTTPException(status_code=502, detail="repurposing came back empty — try again")
-    rows = db.create_ideas(user["id"], ideas)
-    return {"ideas": [db.idea_out(r) for r in rows]}
+    user_id = user["id"]
+
+    def worker(progress, get_steer):
+        progress(f"Cutting ideas from “{material['title']}”…")
+        ideas = agent.repurpose_material(user_id, material, creator["ip_profile"])
+        if not ideas:
+            raise RuntimeError("repurposing came back empty — try again")
+        db.create_ideas(user_id, ideas)
+        return f"{len(ideas)} ideas cut from “{material['title']}” — they're in the Studio."
+
+    return _start_run(user, "repurpose", worker, material_id=material_id)
 
 
 class ResearchRequest(BaseModel):
@@ -250,11 +329,24 @@ def run_research(req: ResearchRequest, user: dict = Depends(auth.current_user)):
     creator = _creator(user)
     _require_active(creator)
     profile = {**creator["ip_profile"], "niche": creator["niche"]}
-    ideas = agent.run_research(user["id"], profile, req.mission)
-    if not ideas:
-        raise HTTPException(status_code=502, detail="the researcher came back empty — try again")
-    rows = db.create_ideas(user["id"], ideas)
-    return {"ideas": [db.idea_out(r) for r in rows]}
+    user_id = user["id"]
+    mission = req.mission
+
+    def worker(progress, get_steer):
+        ideas = agent.run_research(user_id, profile, mission,
+                                   on_progress=progress, get_steer=get_steer)
+        if not ideas:
+            raise RuntimeError("the researcher came back empty — try again")
+        rows = db.create_ideas(user_id, ideas)
+        # Fresh trends supersede stale proposals from earlier runs.
+        superseded = db.supersede_stale_ideas(user_id, rows[0]["run_id"])
+        return (
+            f"{len(rows)} ideas proposed"
+            + (f" · {superseded} stale idea{'s' if superseded != 1 else ''} superseded" if superseded else "")
+            + "."
+        )
+
+    return _start_run(user, "research", worker)
 
 
 @app.post("/ideas/{idea_id}/accept")
@@ -390,33 +482,40 @@ def run_review(user: dict = Depends(auth.current_user)):
         raise HTTPException(status_code=503, detail="LLM not configured")
     creator = _creator(user)
     _require_active(creator)
-    ideas = [db.idea_out(i) for i in db.list_ideas(user["id"])]
-    drafts = [db.draft_out(d) for d in db.list_drafts(user["id"])]
-    results = [db.result_out(r) for r in db.list_results(user["id"])]
+    user_id = user["id"]
 
-    def count_by(rows, key):
-        out: dict[str, int] = {}
-        for r in rows:
-            out[r.get(key) or "—"] = out.get(r.get(key) or "—", 0) + 1
-        return out
+    def worker(progress, get_steer):
+        progress("Reading your goals, pipeline, and results…")
+        ideas = [db.idea_out(i) for i in db.list_ideas(user_id)]
+        drafts = [db.draft_out(d) for d in db.list_drafts(user_id)]
+        results = [db.result_out(r) for r in db.list_results(user_id)]
 
-    stats = {
-        "ideasByPillar": count_by(ideas, "pillar"),
-        "ideasByStatus": count_by(ideas, "status"),
-        "draftsByStatus": count_by(drafts, "status"),
-        "draftsByPlatform": count_by(drafts, "platform"),
-        "results": [
-            {"title": r["title"], "platform": r["platform"], "postedAt": r["postedAt"],
-             "metrics": r["metrics"], "notes": r.get("notes")}
-            for r in results[:20]
-        ],
-        "declineLessons": db.decline_lessons(user["id"]),
-    }
-    review = agent.growth_review(user["id"], creator["ip_profile"], stats)
-    if review is None:
-        raise HTTPException(status_code=502, detail="the review came back empty — try again")
-    row = db.create_review(user["id"], review["summary"], review["moves"])
-    return db.review_out(row)
+        def count_by(rows, key):
+            out: dict[str, int] = {}
+            for r in rows:
+                out[r.get(key) or "—"] = out.get(r.get(key) or "—", 0) + 1
+            return out
+
+        stats = {
+            "ideasByPillar": count_by(ideas, "pillar"),
+            "ideasByStatus": count_by(ideas, "status"),
+            "draftsByStatus": count_by(drafts, "status"),
+            "draftsByPlatform": count_by(drafts, "platform"),
+            "results": [
+                {"title": r["title"], "platform": r["platform"], "postedAt": r["postedAt"],
+                 "metrics": r["metrics"], "notes": r.get("notes")}
+                for r in results[:20]
+            ],
+            "declineLessons": db.decline_lessons(user_id),
+        }
+        progress("Writing the review…")
+        review = agent.growth_review(user_id, creator["ip_profile"], stats)
+        if review is None:
+            raise RuntimeError("the review came back empty — try again")
+        db.create_review(user_id, review["summary"], review["moves"])
+        return review["summary"][:300]
+
+    return _start_run(user, "review", worker)
 
 
 class MoveDecision(BaseModel):
