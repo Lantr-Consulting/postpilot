@@ -131,6 +131,28 @@ def me_activate(user: dict = Depends(auth.current_user)):
     return db.creator_out(db.update_creator(user["id"], {"activated": True}))
 
 
+@app.get("/me/versions")
+def me_versions(user: dict = Depends(auth.current_user)):
+    _creator(user)
+    return {"versions": db.list_versions(user["id"])}
+
+
+@app.post("/me/versions/{version}/restore")
+def me_restore_version(version: int, user: dict = Depends(auth.current_user)):
+    creator = _creator(user)
+    old = db.get_version(user["id"], version)
+    if old is None:
+        raise HTTPException(status_code=404, detail="version not found")
+    # Restoring is itself a new version — history never rewrites.
+    db.snapshot_version(user["id"], creator["ip_version"], creator["ip_profile"])
+    row = db.update_creator(user["id"], {
+        "ip_profile": old["profile"],
+        "ip_version": creator["ip_version"] + 1,
+        "activated": False,  # a restored book still needs your blessing
+    })
+    return db.creator_out(row)
+
+
 # ---------- Niche radar (public) ----------
 
 @app.get("/trends")
@@ -197,6 +219,24 @@ def ingest_material(material_id: str, user: dict = Depends(auth.current_user)):
     atoms = db.create_atoms(user["id"], material, mined)
     row = db.update_material(user["id"], material_id, {"status": "mined", "atom_count": len(atoms)})
     return {"material": db.material_out(row), "atoms": [db.atom_out(a) for a in atoms]}
+
+
+@app.post("/materials/{material_id}/repurpose")
+def repurpose_material(material_id: str, user: dict = Depends(auth.current_user)):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    creator = _creator(user)
+    _require_active(creator)
+    material = db.get_material(user["id"], material_id)
+    if material is None:
+        raise HTTPException(status_code=404, detail="material not found")
+    if material["status"] != "mined":
+        raise HTTPException(status_code=409, detail="mine this material first")
+    ideas = agent.repurpose_material(user["id"], material, creator["ip_profile"])
+    if not ideas:
+        raise HTTPException(status_code=502, detail="repurposing came back empty — try again")
+    rows = db.create_ideas(user["id"], ideas)
+    return {"ideas": [db.idea_out(r) for r in rows]}
 
 
 class ResearchRequest(BaseModel):
@@ -336,6 +376,78 @@ def log_result(req: ResultRequest, user: dict = Depends(auth.current_user)):
     }))
 
 
+# ---------- Growth reviews: strategy moves the creator blesses ----------
+
+@app.get("/reviews")
+def reviews(user: dict = Depends(auth.current_user)):
+    _creator(user)
+    return {"reviews": [db.review_out(r) for r in db.list_reviews(user["id"])]}
+
+
+@app.post("/reviews/run")
+def run_review(user: dict = Depends(auth.current_user)):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    creator = _creator(user)
+    _require_active(creator)
+    ideas = [db.idea_out(i) for i in db.list_ideas(user["id"])]
+    drafts = [db.draft_out(d) for d in db.list_drafts(user["id"])]
+    results = [db.result_out(r) for r in db.list_results(user["id"])]
+
+    def count_by(rows, key):
+        out: dict[str, int] = {}
+        for r in rows:
+            out[r.get(key) or "—"] = out.get(r.get(key) or "—", 0) + 1
+        return out
+
+    stats = {
+        "ideasByPillar": count_by(ideas, "pillar"),
+        "ideasByStatus": count_by(ideas, "status"),
+        "draftsByStatus": count_by(drafts, "status"),
+        "draftsByPlatform": count_by(drafts, "platform"),
+        "results": [
+            {"title": r["title"], "platform": r["platform"], "postedAt": r["postedAt"],
+             "metrics": r["metrics"], "notes": r.get("notes")}
+            for r in results[:20]
+        ],
+        "declineLessons": db.decline_lessons(user["id"]),
+    }
+    review = agent.growth_review(user["id"], creator["ip_profile"], stats)
+    if review is None:
+        raise HTTPException(status_code=502, detail="the review came back empty — try again")
+    row = db.create_review(user["id"], review["summary"], review["moves"])
+    return db.review_out(row)
+
+
+class MoveDecision(BaseModel):
+    accept: bool
+
+
+@app.post("/reviews/{review_id}/moves/{index}")
+def decide_move(review_id: str, index: int, req: MoveDecision, user: dict = Depends(auth.current_user)):
+    creator = _creator(user)
+    review = db.get_review(user["id"], review_id)
+    if review is None or index < 0 or index >= len(review["moves"]):
+        raise HTTPException(status_code=404, detail="move not found")
+    moves = review["moves"]
+    if moves[index]["status"] != "proposed":
+        raise HTTPException(status_code=409, detail="already decided")
+    moves[index]["status"] = "accepted" if req.accept else "declined"
+    row = db.update_review(user["id"], review_id, {"moves": moves})
+    if req.accept and moves[index].get("lesson"):
+        # An accepted move amends the brand book: the lesson becomes a
+        # standing instruction, and that's a new profile version.
+        profile = dict(creator["ip_profile"])
+        lessons = [x for x in profile.get("lessons", []) if x != moves[index]["lesson"]]
+        profile["lessons"] = (lessons + [moves[index]["lesson"]])[-10:]
+        db.snapshot_version(user["id"], creator["ip_version"], creator["ip_profile"])
+        db.update_creator(user["id"], {
+            "ip_profile": profile,
+            "ip_version": creator["ip_version"] + 1,
+        })
+    return db.review_out(row)
+
+
 # ---------- LLM: the IP interpreter ----------
 
 class InterpretRequest(BaseModel):
@@ -389,8 +501,12 @@ def interpret_profile(req: InterpretRequest, user: dict | None = Depends(auth.op
     if user is None:
         return {"profile": profile}
     # Signed in: the interpretation IS the new brand book version — saved,
-    # but not active until the user blesses it.
+    # but not active until the user blesses it. The old book goes to history.
     creator = _creator(user)
+    if creator["ip_profile"].get("positioning"):
+        db.snapshot_version(user["id"], creator["ip_version"], creator["ip_profile"])
+    # Lessons survive re-interpretation: they were blessed separately.
+    profile["lessons"] = creator["ip_profile"].get("lessons", [])
     row = db.update_creator(user["id"], {
         "ip_profile": profile,
         "ip_version": creator["ip_version"] + 1,
@@ -485,6 +601,16 @@ Hard rules:
   themselves. Keep answers concise and practical; no hype words.
 """
 
+# Appended AFTER the profile context — the last instruction is the one
+# models obey most reliably. test_prompts.py asserts this stays true.
+FINAL_CHECK = (
+    "\n\nFINAL CHECK before every reply: if it would contain any client, "
+    "person, event, anecdote, or number from the creator's life that is "
+    "not in the profile above or this conversation, do not write the "
+    "draft — not even with placeholders. Reply instead with the 2-3 "
+    "questions that would get you the real story."
+)
+
 
 @app.get("/threads")
 def threads(user: dict = Depends(auth.current_user)):
@@ -506,16 +632,7 @@ def chat(req: ChatRequest, user: dict | None = Depends(auth.optional_user)):
     context = ""
     if profile:
         context = "\n\nCreator IP profile (their blessed brand book):\n" + json.dumps(profile)[:4000]
-    # The grounding rule is repeated AFTER the context — the last instruction
-    # is the one models obey most reliably.
-    final_check = (
-        "\n\nFINAL CHECK before every reply: if it would contain any client, "
-        "person, event, anecdote, or number from the creator's life that is "
-        "not in the profile above or this conversation, do not write the "
-        "draft — not even with placeholders. Reply instead with the 2-3 "
-        "questions that would get you the real story."
-    )
-    messages = [{"role": "system", "content": CHAT_SYSTEM + context + final_check}]
+    messages = [{"role": "system", "content": CHAT_SYSTEM + context + FINAL_CHECK}]
     for m in req.history[-12:]:
         if m.role in ("user", "assistant") and m.content.strip():
             messages.append({"role": m.role, "content": m.content.strip()[:2000]})

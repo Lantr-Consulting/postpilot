@@ -15,19 +15,22 @@ A Lantr sample project, built in the same order a student builds theirs.
 
 **Live:** https://postpilot-drab-seven.vercel.app
 
-## Status: Milestone 5 — Memory & accounts
+## Status: Milestone 6 — The Growth Lead upgrade
 
-Two people, two worlds. Password sign-in (Supabase Auth on the shared
-sample-fleet project — `pp_`-prefixed tables beside the siblings' — a
-shortcut a real student wouldn't take), one creator per user, and RLS
-read-own policies on all nine tables with every write going through the
-backend's service key. New creators start with a **blank, inactive brand
-book**: the interpreter now also extracts your niche (topics, subreddits,
-queries) from your story, and the server enforces the gate — research,
-mining, and drafting return 403 until you explicitly Activate. Your
-editorial rules, Library, pipeline, results, and Growth Lead threads are
-all yours alone (verified: a second account sees zero rows). Signed out,
-the whole app still runs on the demo creator's sample data. Full design in
+The thesis milestone: the creator teaches the agent, and the teaching is
+versioned. The brand book now has **history** — every interpretation,
+restore, and accepted review move snapshots the old version (restoring
+makes a new version and needs re-blessing; history never rewrites).
+**Growth reviews are real runs**: goals, pillar coverage, platform mix,
+and your logged results go in; a grounded summary and 2-3 strategy moves
+come out — and an accepted move writes its lesson into the brand book as
+a **standing instruction** the agent obeys in every research and drafting
+run. **Repurposing** cuts a mined material into Studio ideas that each
+cite their atom (an idea with no real atom is dropped by code). Research
+tags ideas to your **narrative arcs** (invented arc names get dropped),
+Performance logs real results against exported drafts, and
+`test_prompts.py` pins every load-bearing prompt sentence so prompt drift
+fails the suite instead of silently shipping. Full design in
 [DESIGN.md](DESIGN.md).
 
 - **Today** — calendar strip, pipeline counts, streak, latest Growth Lead insight
@@ -50,8 +53,8 @@ the whole app still runs on the demo creator's sample data. Full design in
 | 3. The Brain | Python backend on Railway; IP interpreter + grounded chat; niche radar goes live on real data ✅ |
 | 4. Hands | Editorial engine (pure code, cited rules) + LangChain agent; material ingestion and idea → draft → export both live ✅ |
 | 5. Memory & accounts | Supabase database, sign-in, one creator per user ✅ |
-| 6. Growth Lead upgrade | Onboarding/Activate, versioned brand book, goals, repurposing, growth reviews, decline-reason lessons *(next)* |
-| 7. Workspace | Async runs (research/ingestion/review), threads, staleness supersession |
+| 6. Growth Lead upgrade | Onboarding/Activate, versioned brand book, goals, repurposing, growth reviews, decline-reason lessons ✅ |
+| 7. Workspace | Async runs (research/ingestion/review), threads, staleness supersession *(next)* |
 | 8. Campaigns | Scheduler with cross-worker claim, scheduled weekly reviews |
 | 9. Evals | Deterministic checks (incl. atom citations resolve) + calibrated LLM judge for voice fidelity; measured improvement |
 | 10. Polish + Blueprint | Product polish, BLUEPRINT.md demo package, BUILD_GUIDE.md |

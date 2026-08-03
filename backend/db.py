@@ -98,6 +98,62 @@ def update_creator(user_id: str, fields: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Profile versions — every interpretation or amendment snapshots the old book
+# ---------------------------------------------------------------------------
+
+def snapshot_version(user_id: str, version: int, profile: dict) -> None:
+    _rest("POST", "pp_profile_versions",
+          json={"user_id": user_id, "version": version, "profile": profile})
+
+
+def list_versions(user_id: str) -> list[dict]:
+    rows = _rest("GET", "pp_profile_versions",
+                 params={"user_id": f"eq.{user_id}", "order": "version.desc", "limit": 20})
+    return [{"version": r["version"], "profile": r["profile"],
+             "createdAt": r["created_at"][:10]} for r in rows]
+
+
+def get_version(user_id: str, version: int) -> dict | None:
+    rows = _rest("GET", "pp_profile_versions",
+                 params={"user_id": f"eq.{user_id}", "version": f"eq.{version}", "limit": 1})
+    return rows[0] if rows else None
+
+
+# ---------------------------------------------------------------------------
+# Growth reviews
+# ---------------------------------------------------------------------------
+
+def review_out(row: dict) -> dict:
+    return {"id": row["id"], "at": row["created_at"][:10],
+            "summary": row["summary"], "moves": row["moves"]}
+
+
+def create_review(user_id: str, summary: str, moves: list[dict]) -> dict:
+    return _rest("POST", "pp_reviews",
+                 json={"user_id": user_id, "summary": summary, "moves": moves},
+                 extra_headers=_REPR)[0]
+
+
+def list_reviews(user_id: str, limit: int = 5) -> list[dict]:
+    return _rest("GET", "pp_reviews",
+                 params={"user_id": f"eq.{user_id}", "order": "created_at.desc",
+                         "limit": limit})
+
+
+def get_review(user_id: str, review_id: str) -> dict | None:
+    rows = _rest("GET", "pp_reviews",
+                 params={"user_id": f"eq.{user_id}", "id": f"eq.{review_id}", "limit": 1})
+    return rows[0] if rows else None
+
+
+def update_review(user_id: str, review_id: str, fields: dict) -> dict | None:
+    rows = _rest("PATCH", "pp_reviews",
+                 params={"user_id": f"eq.{user_id}", "id": f"eq.{review_id}"},
+                 json=fields, extra_headers=_REPR)
+    return rows[0] if rows else None
+
+
+# ---------------------------------------------------------------------------
 # Library
 # ---------------------------------------------------------------------------
 
@@ -201,6 +257,7 @@ def idea_out(row: dict) -> dict:
         "rationale": row["rationale"],
         "evidence": row["evidence"],
         "status": row["status"],
+        "narrative": row.get("narrative"),
         "declineReason": (row.get("feedback") or {}).get("reason"),
         "runId": row["run_id"],
     }
@@ -225,6 +282,7 @@ def create_ideas(user_id: str, ideas: list[dict]) -> list[dict]:
             "user_id": user_id, "title": i["title"], "angle": i["angle"],
             "pillar": i["pillar"], "rationale": i["rationale"],
             "evidence": i["evidence"], "run_id": i["runId"],
+            "narrative": i.get("narrative"),
         }
         for i in ideas
     ], extra_headers=_REPR)

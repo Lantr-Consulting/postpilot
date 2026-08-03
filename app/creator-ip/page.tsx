@@ -1,7 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { activate, interpretProfile } from "@/lib/api";
+import { useEffect, useState } from "react";
+import {
+  activate,
+  getVersions,
+  interpretProfile,
+  restoreVersion,
+  type ProfileVersion,
+} from "@/lib/api";
 import { useMe } from "@/lib/use-me";
 import { CREATOR } from "@/lib/mock";
 import type { IpProfile } from "@/lib/types";
@@ -28,6 +34,28 @@ export default function CreatorIpPage() {
   const p = signedIn ? me.ipProfile : localProfile;
   const activated = signedIn ? me.activated : CREATOR.activated;
   const empty = signedIn && !p.positioning;
+
+  // Version history — every interpretation, restore, and accepted review
+  // move leaves a snapshot behind.
+  const [versions, setVersions] = useState<ProfileVersion[]>([]);
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    getVersions().then((v) => alive && setVersions(v)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [signedIn, p.version]);
+
+  async function restore(version: number) {
+    try {
+      await restoreVersion(version);
+      await refresh();
+      toast("success", `Restored v${version} as the newest version — review and re-activate.`);
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "Restore failed.");
+    }
+  }
 
   async function interpret() {
     if (interpreting || !story.trim()) return;
@@ -136,6 +164,37 @@ export default function CreatorIpPage() {
               </p>
             )}
           </Card>
+
+          {signedIn && versions.length > 0 && (
+            <Card title="Version history">
+              <ul className="flex flex-col gap-2">
+                {versions.map((v) => (
+                  <li key={v.version} className="rounded-xl bg-surface-2 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold">
+                        v{v.version}
+                        <span className="ml-1.5 font-normal text-ink-muted">
+                          {v.createdAt}
+                        </span>
+                      </span>
+                      <button
+                        onClick={() => restore(v.version)}
+                        className="btn-ghost px-2.5 py-1 text-[11px]"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-ink-muted">
+                      {v.profile.positioning || "(blank book)"}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-[11px] text-ink-muted">
+                History never rewrites — restoring makes a new version.
+              </p>
+            </Card>
+          )}
         </div>
 
         {/* Brand book */}
@@ -217,6 +276,22 @@ export default function CreatorIpPage() {
               </p>
             )}
           </Card>
+
+          {(p.lessons?.length ?? 0) > 0 && (
+            <Card title="Standing lessons">
+              <p className="mb-2 text-xs text-ink-muted">
+                Written by accepted review moves — the agent obeys these in
+                every generation.
+              </p>
+              <ul className="flex flex-col gap-1.5 text-sm text-ink-2">
+                {p.lessons!.map((l) => (
+                  <li key={l} className="index-card rounded-lg px-3 py-2">
+                    {l}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
         </div>
       </div>
     </div>

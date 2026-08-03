@@ -113,13 +113,22 @@ _RESEARCH_PROMPT = ChatPromptTemplate.from_messages(
 _IDEAS_SYSTEM = """Turn the research summary into content ideas as JSON:
 {"ideas": [{"title": str, "angle": str (one sentence, the specific take),
 "pillar": str (one of the creator's pillars), "rationale": str (why now —
-cite the research), "evidence": [{"source": str, "datum": str,
+cite the research), "narrative": str|null (EXACTLY one of the creator's
+narrative arc titles when the idea advances that arc, else null),
+"evidence": [{"source": str, "datum": str,
 "url": str|null, "atomId": str|null}]}]}
 Rules: 3-4 ideas max. Every idea needs at least one evidence row from the
 research. When an idea draws on the creator's own material, cite the atomId
 from the Library — and NEVER cite an atomId the research didn't surface.
 Ideas must fit the creator's pillars and voice. No reaction/dunk content
 unless their profile asks for it."""
+
+
+def _standing_lessons(user_id: str, profile: dict) -> str:
+    """Accepted review moves + recent decline reasons — what the creator has
+    already taught the agent, injected into every generation."""
+    lessons = list(profile.get("lessons", [])) + db.decline_lessons(user_id)
+    return "\n".join(f"- {r}" for r in lessons) or "(none yet)"
 
 
 def run_research(user_id: str, profile: dict, mission: str | None = None) -> list[dict]:
@@ -130,7 +139,6 @@ def run_research(user_id: str, profile: dict, mission: str | None = None) -> lis
     executor = AgentExecutor(
         agent=agent, tools=tools, max_iterations=6, return_intermediate_steps=True
     )
-    lessons = db.decline_lessons(user_id)
     task = mission or (
         "Scan the niche for what's moving this week and find 3-4 content "
         "opportunities for this creator."
@@ -138,7 +146,7 @@ def run_research(user_id: str, profile: dict, mission: str | None = None) -> lis
     result = executor.invoke(
         {
             "profile": json.dumps(profile)[:3000],
-            "lessons": "\n".join(f"- {r}" for r in lessons) or "(none yet)",
+            "lessons": _standing_lessons(user_id, profile),
             "task": task,
         }
     )
@@ -168,6 +176,7 @@ def run_research(user_id: str, profile: dict, mission: str | None = None) -> lis
         return []
 
     known_atoms = db.atom_titles(user_id)
+    arc_titles = {n.get("title") for n in profile.get("narratives", [])}
     run_id = f"run-{uuid.uuid4().hex[:8]}"
     rows = []
     for i in (data.get("ideas") or [])[:4]:
@@ -194,10 +203,127 @@ def run_research(user_id: str, profile: dict, mission: str | None = None) -> lis
                 "pillar": str(i.get("pillar", ""))[:40],
                 "rationale": str(i.get("rationale", ""))[:400],
                 "evidence": evidence,
+                # Code disposes: an arc tag must be a real arc, or it's dropped.
+                "narrative": i.get("narrative") if i.get("narrative") in arc_titles else None,
                 "runId": run_id,
             }
         )
     return rows
+
+
+_REPURPOSE_SYSTEM = """You turn ONE piece of a creator's raw material into a
+short content series, as JSON:
+{"ideas": [{"title": str, "angle": str (one sentence, the specific take),
+"pillar": str (one of the creator's pillars), "rationale": str (why this
+cut of the material stands alone), "narrative": str|null (one of their arc
+titles or null), "evidence": [{"source": "Library", "datum": str (the atom,
+compressed), "url": null, "atomId": str}]}]}
+Rules: 2-3 ideas, each built on a DIFFERENT atom from the provided list —
+cite it by atomId. Every idea must be fully grounded in the material;
+nothing invented. Ideas must fit the creator's pillars and voice."""
+
+
+def repurpose_material(user_id: str, material: dict, profile: dict) -> list[dict]:
+    """One mined material -> a short series of Studio ideas, every one
+    citing its atom. The material must already be mined."""
+    atoms = [
+        db.atom_out(a)
+        for a in db.list_atoms(user_id)
+        if a["material_id"] == material["id"]
+    ]
+    if not atoms:
+        return []
+    shape = _llm.bind(response_format={"type": "json_object"})
+    raw = shape.invoke(
+        [
+            {"role": "system", "content": _REPURPOSE_SYSTEM},
+            {
+                "role": "user",
+                "content": "Creator profile:\n" + json.dumps(profile)[:2500]
+                + "\n\nMaterial: “" + material["title"] + "”"
+                + "\n\nIts atoms:\n" + json.dumps(
+                    [{"atomId": a["id"], "kind": a["kind"], "text": a["text"]} for a in atoms]
+                ),
+            },
+        ]
+    )
+    try:
+        data = json.loads(raw.content)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    known = {a["id"] for a in atoms}
+    arc_titles = {n.get("title") for n in profile.get("narratives", [])}
+    run_id = f"repurpose-{uuid.uuid4().hex[:8]}"
+    rows = []
+    for i in (data.get("ideas") or [])[:3]:
+        if not isinstance(i, dict) or not str(i.get("title", "")).strip():
+            continue
+        evidence = [
+            {"source": "Library", "datum": str(e.get("datum", ""))[:200],
+             "url": None, "atomId": e.get("atomId")}
+            for e in (i.get("evidence") or [])[:3]
+            if isinstance(e, dict) and e.get("atomId") in known
+        ]
+        if not evidence:
+            continue  # code disposes: a repurposed idea with no real atom dies
+        rows.append(
+            {
+                "title": str(i["title"])[:120],
+                "angle": str(i.get("angle", ""))[:300],
+                "pillar": str(i.get("pillar", ""))[:40],
+                "rationale": str(i.get("rationale", ""))[:400],
+                "evidence": evidence,
+                "narrative": i.get("narrative") if i.get("narrative") in arc_titles else None,
+                "runId": run_id,
+            }
+        )
+    return rows
+
+
+_REVIEW_SYSTEM = """You are the creator's Growth Lead running their periodic
+growth review. You get their brand book (goals, pillars, arcs), pipeline
+coverage, and self-reported results. Output JSON:
+{"summary": str (4-6 sentences: what's working, what's under-used, where
+each goal stands — cite ONLY numbers present in the data),
+"moves": [{"title": str (imperative, specific), "rationale": str (one
+sentence, grounded in the data), "lesson": str (the move restated as a
+one-line standing instruction for future content generation)}]}
+Rules: 2-3 moves max, each one traceable to the data given. Never invent
+metrics. If the data is thin, say so in the summary and propose moves that
+would produce better data."""
+
+
+def growth_review(user_id: str, profile: dict, stats: dict) -> dict | None:
+    shape = _llm.bind(response_format={"type": "json_object"})
+    raw = shape.invoke(
+        [
+            {"role": "system", "content": _REVIEW_SYSTEM},
+            {
+                "role": "user",
+                "content": "Brand book:\n" + json.dumps(profile)[:3000]
+                + "\n\nPipeline and results data:\n" + json.dumps(stats)[:5000],
+            },
+        ]
+    )
+    try:
+        data = json.loads(raw.content)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    moves = []
+    for m in (data.get("moves") or [])[:3]:
+        if isinstance(m, dict) and str(m.get("title", "")).strip():
+            moves.append(
+                {
+                    "title": str(m["title"])[:120],
+                    "rationale": str(m.get("rationale", ""))[:300],
+                    "lesson": str(m.get("lesson", ""))[:200],
+                    "status": "proposed",
+                }
+            )
+    summary = str(data.get("summary", "")).strip()[:1500]
+    if not summary and not moves:
+        return None
+    return {"summary": summary, "moves": moves}
 
 
 _MINE_SYSTEM = """You mine a creator's raw material (transcript, notes, old
@@ -272,6 +398,8 @@ def draft_variants(user_id: str, idea: dict, profile: dict, rules: dict, platfor
         shape = _llm.bind(response_format={"type": "json_object"})
         content = (
             "Creator profile:\n" + json.dumps(profile)[:2500]
+            + "\n\nStanding lessons the creator has taught you (obey them):\n"
+            + _standing_lessons(user_id, profile)
             + "\n\nEditorial rules: " + json.dumps(rules)
             + "\n\nPlatform char limits: " + json.dumps(limits)
             + "\n\nIdea: " + json.dumps({k: idea[k] for k in ("title", "angle", "pillar", "rationale")})

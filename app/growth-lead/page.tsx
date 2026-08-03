@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { chat as apiChat, getThreadMessages, getThreads } from "@/lib/api";
+import {
+  chat as apiChat,
+  decideMove,
+  getReviews,
+  getThreadMessages,
+  getThreads,
+  runReview,
+  type Review,
+} from "@/lib/api";
 import { useMe } from "@/lib/use-me";
 import { CREATOR, REVIEW, THREADS } from "@/lib/mock";
 import type { ChatMessage } from "@/lib/types";
@@ -17,8 +25,51 @@ interface ThreadStub {
 
 export default function GrowthLeadPage() {
   const toast = useToast();
-  const { me } = useMe();
+  const { me, refresh: refreshMe } = useMe();
   const signedIn = me !== null;
+
+  // Growth reviews — live when signed in, the mock review otherwise.
+  const [liveReviews, setLiveReviews] = useState<Review[] | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    getReviews().then((rs) => alive && setLiveReviews(rs)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
+
+  async function startReview() {
+    if (!signedIn) {
+      toast("info", "Sign in to run a real review — this is sample data.");
+      return;
+    }
+    setReviewing(true);
+    try {
+      const review = await runReview();
+      setLiveReviews((rs) => [review, ...(rs ?? [])]);
+      toast("success", "Review done — decide on its moves below.");
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "Review failed — try again.");
+    }
+    setReviewing(false);
+  }
+
+  async function decideLiveMove(review: Review, index: number, accept: boolean) {
+    try {
+      const updated = await decideMove(review.id, index, accept);
+      setLiveReviews((rs) => (rs ?? []).map((r) => (r.id === updated.id ? updated : r)));
+      if (accept) {
+        await refreshMe(); // the lesson amended the brand book (new version)
+        toast("success", "Accepted — written into your brand book as a standing lesson.");
+      } else {
+        toast("info", "Declined — noted.");
+      }
+    } catch (e) {
+      toast("error", e instanceof Error ? e.message : "Couldn't save that decision.");
+    }
+  }
 
   const [threadId, setThreadId] = useState<string | null>(THREADS[0].id);
   const [messages, setMessages] = useState<ChatMessage[]>(THREADS[0].messages);
@@ -103,7 +154,7 @@ export default function GrowthLeadPage() {
     setMessages((ms) => [...ms, { id: `a-${at}`, role: "assistant", text: reply, at }]);
   }
 
-  function decideMove(id: string, status: "accepted" | "declined") {
+  function decideMockMove(id: string, status: "accepted" | "declined") {
     setMoves((ms) => ms.map((m) => (m.id === id ? { ...m, status } : m)));
     toast(
       status === "accepted" ? "success" : "info",
@@ -188,45 +239,111 @@ export default function GrowthLeadPage() {
 
           <Card
             title="Latest growth review"
-            action={<span className="text-xs text-ink-muted">{fmtDate(REVIEW.at)}</span>}
+            action={
+              <button
+                onClick={startReview}
+                disabled={reviewing}
+                className="btn-primary px-3 py-1 text-[11px]"
+              >
+                {reviewing ? "Reviewing…" : "Run review"}
+              </button>
+            }
           >
-            <p className="text-xs leading-relaxed text-ink-2">{REVIEW.summary}</p>
-            <ul className="mt-3 flex flex-col gap-2">
-              {moves.map((m) => (
-                <li key={m.id} className="rounded-xl bg-surface-2 p-3">
-                  <p className="text-xs font-semibold">{m.title}</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-                    {m.rationale}
+            {signedIn && liveReviews !== null ? (
+              liveReviews.length === 0 ? (
+                <p className="text-xs text-ink-muted">
+                  No reviews yet. Run one — it reads your goals, pillar
+                  coverage, and logged results, and proposes moves you can
+                  accept into the brand book.
+                </p>
+              ) : (
+                <>
+                  <p className="mb-2 text-[11px] text-ink-muted">
+                    {fmtDate(liveReviews[0].at)}
                   </p>
-                  {m.status === "proposed" ? (
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        onClick={() => decideMove(m.id, "accepted")}
-                        className="btn-primary px-3 py-1 text-[11px]"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => decideMove(m.id, "declined")}
-                        className="btn-ghost px-3 py-1 text-[11px]"
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  ) : (
-                    <p
-                      className={`mt-2 text-[11px] font-medium ${
-                        m.status === "accepted" ? "text-good" : "text-ink-muted"
-                      }`}
-                    >
-                      {m.status === "accepted"
-                        ? "Accepted → profile amended"
-                        : "Declined"}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
+                  <p className="text-xs leading-relaxed text-ink-2">
+                    {liveReviews[0].summary}
+                  </p>
+                  <ul className="mt-3 flex flex-col gap-2">
+                    {liveReviews[0].moves.map((m, i) => (
+                      <li key={i} className="rounded-xl bg-surface-2 p-3">
+                        <p className="text-xs font-semibold">{m.title}</p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+                          {m.rationale}
+                        </p>
+                        {m.status === "proposed" ? (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              onClick={() => decideLiveMove(liveReviews[0], i, true)}
+                              className="btn-primary px-3 py-1 text-[11px]"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => decideLiveMove(liveReviews[0], i, false)}
+                              className="btn-ghost px-3 py-1 text-[11px]"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        ) : (
+                          <p
+                            className={`mt-2 text-[11px] font-medium ${
+                              m.status === "accepted" ? "text-good" : "text-ink-muted"
+                            }`}
+                          >
+                            {m.status === "accepted"
+                              ? "Accepted → brand book amended"
+                              : "Declined"}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )
+            ) : (
+              <>
+                <p className="mb-2 text-[11px] text-ink-muted">{fmtDate(REVIEW.at)}</p>
+                <p className="text-xs leading-relaxed text-ink-2">{REVIEW.summary}</p>
+                <ul className="mt-3 flex flex-col gap-2">
+                  {moves.map((m) => (
+                    <li key={m.id} className="rounded-xl bg-surface-2 p-3">
+                      <p className="text-xs font-semibold">{m.title}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+                        {m.rationale}
+                      </p>
+                      {m.status === "proposed" ? (
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={() => decideMockMove(m.id!, "accepted")}
+                            className="btn-primary px-3 py-1 text-[11px]"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => decideMockMove(m.id!, "declined")}
+                            className="btn-ghost px-3 py-1 text-[11px]"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      ) : (
+                        <p
+                          className={`mt-2 text-[11px] font-medium ${
+                            m.status === "accepted" ? "text-good" : "text-ink-muted"
+                          }`}
+                        >
+                          {m.status === "accepted"
+                            ? "Accepted → profile amended"
+                            : "Declined"}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </Card>
 
           <Card title="Threads">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { addMaterial, ingestMaterial } from "@/lib/api";
+import { addMaterial, ingestMaterial, repurposeMaterial } from "@/lib/api";
 import { useWorkspace } from "@/lib/use-workspace";
 import { ATOMS, MATERIALS } from "@/lib/mock";
 import { fmtDate } from "@/lib/format";
@@ -29,6 +29,7 @@ export default function LibraryPage() {
   const [kind, setKind] = useState("notes");
   const [text, setText] = useState("");
   const [mining, setMining] = useState(false);
+  const [repurposing, setRepurposing] = useState<string | null>(null);
 
   const q = query.trim().toLowerCase();
   const atoms = q
@@ -172,15 +173,33 @@ export default function LibraryPage() {
                     </p>
                     {m.status === "mined" && (
                       <button
-                        onClick={() =>
-                          toast(
-                            "info",
-                            "Repurposing — one material into a week of drafts — arrives at Milestone 6."
-                          )
-                        }
+                        onClick={async () => {
+                          if (!live) {
+                            toast("info", "Sign in to repurpose your own material.");
+                            return;
+                          }
+                          if (repurposing) return;
+                          setRepurposing(m.id);
+                          try {
+                            const { ideas } = await repurposeMaterial(m.id);
+                            toast(
+                              "success",
+                              `${ideas.length} ideas cut from “${m.title}” — they're in the Studio.`
+                            );
+                          } catch (e) {
+                            toast(
+                              "error",
+                              e instanceof Error && e.message.length > 3
+                                ? e.message
+                                : "Repurposing failed — try again."
+                            );
+                          }
+                          setRepurposing(null);
+                        }}
+                        disabled={repurposing === m.id}
                         className="btn-ghost mt-2 px-3 py-1 text-[11px]"
                       >
-                        Repurpose this
+                        {repurposing === m.id ? "Cutting ideas…" : "Repurpose this"}
                       </button>
                     )}
                   </li>

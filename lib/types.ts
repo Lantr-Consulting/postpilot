@@ -48,6 +48,7 @@ export interface IpProfile {
   voice: Voice;
   audience: string;
   goals: Goal[];
+  lessons?: string[]; // standing instructions from accepted review moves
 }
 
 // The user-blessed rules editorial.py enforces. The user owns every rule.
@@ -119,6 +120,7 @@ export interface Idea {
   rationale: string;
   evidence: EvidenceRow[];
   status: IdeaStatus;
+  narrative?: string | null; // the arc this idea advances, if any
   declineReason?: string;
   runId: string;
 }
@@ -210,9 +212,10 @@ export interface Campaign {
 export type MoveStatus = "proposed" | "accepted" | "declined";
 
 export interface StrategyMove {
-  id: string;
+  id?: string;
   title: string;
   rationale: string;
+  lesson?: string; // the standing instruction an acceptance writes into the book
   status: MoveStatus; // accepted moves amend the IP profile
 }
 

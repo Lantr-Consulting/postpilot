@@ -93,6 +93,48 @@ export function activate(): Promise<Omit<Me, "email">> {
   return req("/me/activate", { method: "POST" });
 }
 
+export interface ProfileVersion {
+  version: number;
+  profile: Omit<IpProfile, "version" | "updatedAt">;
+  createdAt: string;
+}
+
+export function getVersions(): Promise<ProfileVersion[]> {
+  return req<{ versions: ProfileVersion[] }>("/me/versions").then((r) => r.versions);
+}
+
+export function restoreVersion(version: number): Promise<Omit<Me, "email">> {
+  return req(`/me/versions/${version}/restore`, { method: "POST" });
+}
+
+// ---------- Growth reviews ----------
+
+export interface Review {
+  id: string;
+  at: string;
+  summary: string;
+  moves: { title: string; rationale: string; lesson?: string; status: string }[];
+}
+
+export function getReviews(): Promise<Review[]> {
+  return req<{ reviews: Review[] }>("/reviews").then((r) => r.reviews);
+}
+
+export function runReview(): Promise<Review> {
+  return req("/reviews/run", { method: "POST" });
+}
+
+export function decideMove(
+  reviewId: string,
+  index: number,
+  accept: boolean
+): Promise<Review> {
+  return req(`/reviews/${reviewId}/moves/${index}`, {
+    method: "POST",
+    body: JSON.stringify({ accept }),
+  });
+}
+
 // ---------- Niche radar ----------
 
 export function getTrends(niche: {
@@ -164,6 +206,10 @@ export function ingestMaterial(
   id: string
 ): Promise<{ material: Material; atoms: Atom[] }> {
   return req(`/materials/${id}/ingest`, { method: "POST" });
+}
+
+export function repurposeMaterial(id: string): Promise<{ ideas: Idea[] }> {
+  return req(`/materials/${id}/repurpose`, { method: "POST" });
 }
 
 export function runResearch(mission?: string): Promise<{ ideas: Idea[] }> {

@@ -213,8 +213,13 @@ export default function StudioPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-semibold">{idea.title}</div>
-                        <div className="mt-0.5 text-xs text-ink-muted">
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
                           {idea.pillar}
+                          {idea.narrative && (
+                            <span className="rounded-full bg-atom-quote/15 px-2 py-0.5 text-[10px] font-medium text-atom-quote">
+                              arc: {idea.narrative}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <IdeaBadge status={idea.status} />
