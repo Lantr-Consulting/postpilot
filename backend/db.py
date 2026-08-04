@@ -91,8 +91,8 @@ def ensure_creator(user_id: str, email: str, defaults: dict) -> dict:
     created = _rest("POST", "pp_creators", json=row, extra_headers=_REPR)[0]
     # Every new account starts with the built-in weekly growth review.
     create_campaign(user_id, {
-        "title": "Weekly growth review",
-        "prompt": "Review goals, pillar coverage, the calendar, and logged results. Propose strategy moves with rationale.",
+        "title": "每周内容回顾",
+        "prompt": "查看内容目标、各方向的发布情况、内容日历和已记录的结果，再提出有依据的调整建议。",
         "cadence": "weekly",
         "hourLocal": 8,
     }, built_in=True)
@@ -206,7 +206,7 @@ def claim_run(user_id: str, kind: str, material_id: str | None = None) -> dict |
                    - datetime.fromisoformat(stale["updated_at"])).total_seconds()
             if attempt == 1 and age > STALE_RUN_SECONDS:
                 update_run(user_id, stale["id"],
-                           {"status": "failed", "report": "orphaned by a restart"})
+                           {"status": "failed", "report": "服务重启后任务没有继续运行"})
                 continue
             return None
     return None

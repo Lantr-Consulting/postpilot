@@ -80,9 +80,9 @@ def _creator(user: dict) -> dict:
 
 def _require_active(creator: dict) -> None:
     if not creator["activated"]:
-        raise HTTPException(status_code=403, detail="Activate your Creator IP first — nothing generates until you bless the brand book.")
+        raise HTTPException(status_code=403, detail="请先确认并启用内容档案，启用前不会生成内容。")
     if creator["paused"]:
-        raise HTTPException(status_code=403, detail="PostPilot is paused — resume it in Settings.")
+        raise HTTPException(status_code=403, detail="PostPilot 已暂停，请在设置中恢复任务。")
 
 
 # ---------- Account ----------
@@ -121,7 +121,7 @@ def me_settings(req: SettingsRequest, user: dict = Depends(auth.current_user)):
     if req.paused is not None:
         fields["paused"] = bool(req.paused)
     if not fields:
-        raise HTTPException(status_code=400, detail="nothing to update")
+        raise HTTPException(status_code=400, detail="没有需要更新的内容")
     return db.creator_out(db.update_creator(user["id"], fields))
 
 
@@ -129,7 +129,7 @@ def me_settings(req: SettingsRequest, user: dict = Depends(auth.current_user)):
 def me_activate(user: dict = Depends(auth.current_user)):
     creator = _creator(user)
     if not creator["ip_profile"].get("positioning"):
-        raise HTTPException(status_code=409, detail="Tell PostPilot your story first — there's no brand book to activate yet.")
+        raise HTTPException(status_code=409, detail="请先介绍自己并生成内容档案，然后再启用。")
     return db.creator_out(db.update_creator(user["id"], {"activated": True}))
 
 
@@ -144,7 +144,7 @@ def me_restore_version(version: int, user: dict = Depends(auth.current_user)):
     creator = _creator(user)
     old = db.get_version(user["id"], version)
     if old is None:
-        raise HTTPException(status_code=404, detail="version not found")
+        raise HTTPException(status_code=404, detail="没有找到这个版本")
     # Restoring is itself a new version — history never rewrites.
     db.snapshot_version(user["id"], creator["ip_version"], creator["ip_profile"])
     row = db.update_creator(user["id"], {
@@ -165,7 +165,7 @@ def _start_run(user: dict, kind: str, worker, material_id: str | None = None) ->
     if run is None:
         raise HTTPException(
             status_code=409,
-            detail="The Growth Lead is mid-run — steer it, or wait for it to finish.",
+            detail="内容顾问正在运行任务，可以补充要求或等待任务完成。",
         )
     run_id = run["id"]
     user_id = user["id"]
@@ -199,7 +199,7 @@ def runs_live(user: dict = Depends(auth.current_user)):
 def run_status(run_id: str, user: dict = Depends(auth.current_user)):
     run = db.get_run(user["id"], run_id)
     if run is None:
-        raise HTTPException(status_code=404, detail="run not found")
+        raise HTTPException(status_code=404, detail="没有找到这个任务")
     return db.run_out(run)
 
 
@@ -210,10 +210,10 @@ class SteerRequest(BaseModel):
 @app.post("/runs/{run_id}/steer")
 def steer_run(run_id: str, req: SteerRequest, user: dict = Depends(auth.current_user)):
     if not req.note.strip():
-        raise HTTPException(status_code=400, detail="empty steering note")
+        raise HTTPException(status_code=400, detail="补充要求不能为空")
     run = db.add_steer(user["id"], run_id, req.note.strip())
     if run is None:
-        raise HTTPException(status_code=409, detail="that run already finished")
+        raise HTTPException(status_code=409, detail="这个任务已经完成")
     return db.run_out(run)
 
 
@@ -230,7 +230,7 @@ def trends(
 
     items = research.radar(split(topics), split(subreddits), split(queries))
     if not items:
-        raise HTTPException(status_code=502, detail="all research sources came back empty")
+        raise HTTPException(status_code=502, detail="暂时没有从公开来源找到可用内容")
     return {"items": items}
 
 
@@ -269,16 +269,16 @@ def add_material(req: MaterialRequest, user: dict = Depends(auth.current_user)):
 @app.post("/materials/{material_id}/ingest")
 def ingest_material(material_id: str, user: dict = Depends(auth.current_user)):
     if llm is None:
-        raise HTTPException(status_code=503, detail="LLM not configured")
+        raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
     _require_active(creator)
     material = db.get_material(user["id"], material_id)
     if material is None:
-        raise HTTPException(status_code=404, detail="material not found")
+        raise HTTPException(status_code=404, detail="没有找到这份材料")
     user_id = user["id"]
 
     def worker(progress, get_steer):
-        progress(f"Mining “{material['title']}” for atoms…")
+        progress(f"正在整理“{material['title']}”…")
         db.update_material(user_id, material_id, {"status": "ingesting"})
         try:
             mined = agent.mine_material(
@@ -287,7 +287,7 @@ def ingest_material(material_id: str, user: dict = Depends(auth.current_user)):
             )
             atoms = db.create_atoms(user_id, material, mined)
             db.update_material(user_id, material_id, {"status": "mined", "atom_count": len(atoms)})
-            return f"Mined {len(atoms)} atoms from “{material['title']}”."
+            return f"已从“{material['title']}”整理出 {len(atoms)} 条可引用材料。"
         except Exception:
             db.update_material(user_id, material_id, {"status": "uploaded"})
             raise
@@ -298,23 +298,23 @@ def ingest_material(material_id: str, user: dict = Depends(auth.current_user)):
 @app.post("/materials/{material_id}/repurpose")
 def repurpose_material(material_id: str, user: dict = Depends(auth.current_user)):
     if llm is None:
-        raise HTTPException(status_code=503, detail="LLM not configured")
+        raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
     _require_active(creator)
     material = db.get_material(user["id"], material_id)
     if material is None:
-        raise HTTPException(status_code=404, detail="material not found")
+        raise HTTPException(status_code=404, detail="没有找到这份材料")
     if material["status"] != "mined":
-        raise HTTPException(status_code=409, detail="mine this material first")
+        raise HTTPException(status_code=409, detail="请先整理这份材料")
     user_id = user["id"]
 
     def worker(progress, get_steer):
-        progress(f"Cutting ideas from “{material['title']}”…")
+        progress(f"正在从“{material['title']}”寻找选题…")
         ideas = agent.repurpose_material(user_id, material, creator["ip_profile"])
         if not ideas:
             raise RuntimeError("repurposing came back empty — try again")
         db.create_ideas(user_id, ideas)
-        return f"{len(ideas)} ideas cut from “{material['title']}” — they're in the Studio."
+        return f"已从“{material['title']}”整理出 {len(ideas)} 个选题，并放进内容工作台。"
 
     return _start_run(user, "repurpose", worker, material_id=material_id)
 
@@ -326,7 +326,7 @@ class ResearchRequest(BaseModel):
 @app.post("/research")
 def run_research(req: ResearchRequest, user: dict = Depends(auth.current_user)):
     if llm is None:
-        raise HTTPException(status_code=503, detail="LLM not configured")
+        raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
     _require_active(creator)
     profile = {**creator["ip_profile"], "niche": creator["niche"]}
@@ -360,12 +360,12 @@ def _research_and_store(user_id: str, profile: dict, mission: str | None,
 @app.post("/ideas/{idea_id}/accept")
 def accept_idea(idea_id: str, user: dict = Depends(auth.current_user)):
     if llm is None:
-        raise HTTPException(status_code=503, detail="LLM not configured")
+        raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
     _require_active(creator)
     idea = db.get_idea(user["id"], idea_id)
     if idea is None:
-        raise HTTPException(status_code=404, detail="idea not found")
+        raise HTTPException(status_code=404, detail="没有找到这个选题")
     db.update_idea(user["id"], idea_id, {"status": "accepted"})
     drafts = agent.draft_variants(
         user["id"], db.idea_out(idea), creator["ip_profile"],
@@ -383,7 +383,7 @@ class DeclineRequest(BaseModel):
 def decline_idea(idea_id: str, req: DeclineRequest, user: dict = Depends(auth.current_user)):
     row = db.update_idea(user["id"], idea_id, {"status": "declined", "feedback": {"reason": req.reason.strip()[:300]}})
     if row is None:
-        raise HTTPException(status_code=404, detail="idea not found")
+        raise HTTPException(status_code=404, detail="没有找到这个选题")
     return db.idea_out(row)
 
 
@@ -403,7 +403,7 @@ def edit_draft(draft_id: str, req: DraftEditRequest, user: dict = Depends(auth.c
     creator = _creator(user)
     draft = db.get_draft(user["id"], draft_id)
     if draft is None:
-        raise HTTPException(status_code=404, detail="draft not found")
+        raise HTTPException(status_code=404, detail="没有找到这篇初稿")
     checks = _recheck(user, draft, req.text, creator["editorial_rules"])
     return db.draft_out(db.update_draft(user["id"], draft_id, {"body": req.text[:6000], "checks": checks}))
 
@@ -415,11 +415,11 @@ def approve_draft(draft_id: str, req: DraftEditRequest, user: dict = Depends(aut
     creator = _creator(user)
     draft = db.get_draft(user["id"], draft_id)
     if draft is None:
-        raise HTTPException(status_code=404, detail="draft not found")
+        raise HTTPException(status_code=404, detail="没有找到这篇初稿")
     checks = _recheck(user, draft, req.text, creator["editorial_rules"])
     if editorial.blocked(checks):
         db.update_draft(user["id"], draft_id, {"body": req.text[:6000], "checks": checks})
-        raise HTTPException(status_code=409, detail={"message": "The editorial engine blocked this draft.", "checks": checks})
+        raise HTTPException(status_code=409, detail={"message": "这篇初稿还有未通过的检查。", "checks": checks})
     db.bump_atom_use(user["id"], draft["atom_ids"])
     return db.draft_out(db.update_draft(
         user["id"], draft_id,
@@ -432,7 +432,7 @@ def approve_draft(draft_id: str, req: DraftEditRequest, user: dict = Depends(aut
 def decline_draft(draft_id: str, req: DeclineRequest, user: dict = Depends(auth.current_user)):
     row = db.update_draft(user["id"], draft_id, {"status": "declined", "feedback": {"reason": req.reason.strip()[:300]}})
     if row is None:
-        raise HTTPException(status_code=404, detail="draft not found")
+        raise HTTPException(status_code=404, detail="没有找到这篇初稿")
     return db.draft_out(row)
 
 
@@ -440,9 +440,9 @@ def decline_draft(draft_id: str, req: DeclineRequest, user: dict = Depends(auth.
 def export_draft(draft_id: str, user: dict = Depends(auth.current_user)):
     draft = db.get_draft(user["id"], draft_id)
     if draft is None:
-        raise HTTPException(status_code=404, detail="draft not found")
+        raise HTTPException(status_code=404, detail="没有找到这篇初稿")
     if draft["status"] != "approved":
-        raise HTTPException(status_code=409, detail="only approved drafts export")
+        raise HTTPException(status_code=409, detail="只有通过审核的初稿可以导出")
     return db.draft_out(db.update_draft(user["id"], draft_id, {"status": "exported"}))
 
 
@@ -495,7 +495,7 @@ def campaigns(user: dict = Depends(auth.current_user)):
 def create_campaign(req: CampaignRequest, user: dict = Depends(auth.current_user)):
     _creator(user)
     if not req.title.strip() or not req.prompt.strip():
-        raise HTTPException(status_code=400, detail="a campaign needs a title and a mission")
+        raise HTTPException(status_code=400, detail="定时任务需要名称和具体要求")
     row = db.create_campaign(user["id"], {
         "title": req.title.strip()[:120],
         "prompt": req.prompt.strip()[:1000],
@@ -527,17 +527,17 @@ def patch_campaign(campaign_id: str, req: CampaignPatch, user: dict = Depends(au
     if req.enabled is not None:
         fields["enabled"] = bool(req.enabled)
     if not fields:
-        raise HTTPException(status_code=400, detail="nothing to update")
+        raise HTTPException(status_code=400, detail="没有需要更新的内容")
     row = db.update_campaign(user["id"], campaign_id, fields)
     if row is None:
-        raise HTTPException(status_code=404, detail="campaign not found")
+        raise HTTPException(status_code=404, detail="没有找到这个定时任务")
     return db.campaign_out(row)
 
 
 @app.delete("/campaigns/{campaign_id}")
 def remove_campaign(campaign_id: str, user: dict = Depends(auth.current_user)):
     if not db.delete_campaign(user["id"], campaign_id):
-        raise HTTPException(status_code=404, detail="campaign not found (built-ins can't be deleted)")
+        raise HTTPException(status_code=404, detail="没有找到这个定时任务；内置任务不能删除")
     return {"ok": True}
 
 
@@ -554,17 +554,17 @@ def _campaign_report(campaign: dict, creator: dict, on_progress=None) -> str:
 @app.post("/campaigns/{campaign_id}/run")
 def run_campaign_now(campaign_id: str, user: dict = Depends(auth.current_user)):
     if llm is None:
-        raise HTTPException(status_code=503, detail="LLM not configured")
+        raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
     _require_active(creator)
     rows = [c for c in db.list_campaigns(user["id"]) if c["id"] == campaign_id]
     if not rows:
-        raise HTTPException(status_code=404, detail="campaign not found")
+        raise HTTPException(status_code=404, detail="没有找到这个定时任务")
     campaign = rows[0]
     user_id = user["id"]
 
     def worker(progress, get_steer):
-        progress(f"Running “{campaign['title']}”…")
+        progress(f"正在运行“{campaign['title']}”…")
         report = _campaign_report(campaign, creator, on_progress=progress)
         db.update_campaign(user_id, campaign_id,
                            {"last_run_at": db._now(), "last_report": report[:500]})
@@ -626,7 +626,7 @@ def reviews(user: dict = Depends(auth.current_user)):
 @app.post("/reviews/run")
 def run_review(user: dict = Depends(auth.current_user)):
     if llm is None:
-        raise HTTPException(status_code=503, detail="LLM not configured")
+        raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
     _require_active(creator)
     user_id = user["id"]
@@ -643,7 +643,7 @@ def _review_and_store(user_id: str, creator: dict, on_progress=None) -> str:
         if on_progress:
             on_progress(msg)
 
-    progress("Reading your goals, pipeline, and results…")
+    progress("正在查看内容目标、创作记录和发布结果…")
     ideas = [db.idea_out(i) for i in db.list_ideas(user_id)]
     drafts = [db.draft_out(d) for d in db.list_drafts(user_id)]
     results = [db.result_out(r) for r in db.list_results(user_id)]
@@ -666,7 +666,7 @@ def _review_and_store(user_id: str, creator: dict, on_progress=None) -> str:
         ],
         "declineLessons": db.decline_lessons(user_id),
     }
-    progress("Writing the review…")
+    progress("正在整理内容回顾…")
     review = agent.growth_review(user_id, creator["ip_profile"], stats)
     if review is None:
         raise RuntimeError("the review came back empty — try again")
@@ -683,10 +683,10 @@ def decide_move(review_id: str, index: int, req: MoveDecision, user: dict = Depe
     creator = _creator(user)
     review = db.get_review(user["id"], review_id)
     if review is None or index < 0 or index >= len(review["moves"]):
-        raise HTTPException(status_code=404, detail="move not found")
+        raise HTTPException(status_code=404, detail="没有找到这条建议")
     moves = review["moves"]
     if moves[index]["status"] != "proposed":
-        raise HTTPException(status_code=409, detail="already decided")
+        raise HTTPException(status_code=409, detail="这条建议已经处理过")
     moves[index]["status"] = "accepted" if req.accept else "declined"
     row = db.update_review(user["id"], review_id, {"moves": moves})
     if req.accept and moves[index].get("lesson"):
@@ -731,13 +731,14 @@ Rules:
 - Everything must trace to what they wrote. When unsure, leave it out —
   an empty field beats an invented one.
 - Sharpen their language; do not replace it with generic marketing speak.
+- Write every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged.
 """
 
 
 @app.post("/interpret-profile")
 def interpret_profile(req: InterpretRequest, user: dict | None = Depends(auth.optional_user)):
     if llm is None:
-        raise HTTPException(status_code=503, detail="LLM not configured")
+        raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     resp = llm.chat.completions.create(
         model=MODEL,
         messages=[
@@ -750,7 +751,7 @@ def interpret_profile(req: InterpretRequest, user: dict | None = Depends(auth.op
     try:
         data = json.loads(resp.choices[0].message.content)
     except (json.JSONDecodeError, TypeError):
-        raise HTTPException(status_code=502, detail="interpreter returned non-JSON")
+        raise HTTPException(status_code=502, detail="内容档案整理失败，请重试")
     profile = _validate_profile(data)
     niche = profile.pop("_niche")
     if user is None:
@@ -854,6 +855,8 @@ Hard rules:
 - Never invent metrics, trend data, or platform statistics.
 - Drafts are suggestions — the creator reviews, edits, and posts everything
   themselves. Keep answers concise and practical; no hype words.
+- Always reply in natural Simplified Chinese, including drafts, questions,
+  explanations, and summaries. Keep proper names and platform names as written.
 """
 
 # Appended AFTER the profile context — the last instruction is the one
@@ -880,7 +883,7 @@ def thread_messages(thread_id: str, user: dict = Depends(auth.current_user)):
 @app.post("/chat")
 def chat(req: ChatRequest, user: dict | None = Depends(auth.optional_user)):
     if llm is None:
-        raise HTTPException(status_code=503, detail="LLM not configured")
+        raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     profile = req.profile
     if user is not None:
         profile = _creator(user)["ip_profile"]
@@ -900,7 +903,7 @@ def chat(req: ChatRequest, user: dict | None = Depends(auth.optional_user)):
     thread_id = req.threadId
     if user is not None:
         if thread_id is None:
-            thread_id = db.create_thread(user["id"], req.message.strip()[:60] or "New thread")["id"]
+            thread_id = db.create_thread(user["id"], req.message.strip()[:60] or "新对话")["id"]
         db.add_message(user["id"], thread_id, "user", req.message.strip())
         db.add_message(user["id"], thread_id, "assistant", reply)
         db.touch_thread(user["id"], thread_id)

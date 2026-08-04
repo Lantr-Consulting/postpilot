@@ -11,9 +11,9 @@ the strategy.
 > Performance data is self-reported.** PostPilot never publishes on your
 > behalf; you are the actuator.
 
-A Lantr sample project, built in the same order a student builds theirs.
+A past Lantr student project, kept online by Lantr as a hosted demonstration.
 
-**Live:** https://postpilot-drab-seven.vercel.app
+**Live:** https://postpilot.lantr.site
 
 ## Status: Milestone 8 — Campaigns
 

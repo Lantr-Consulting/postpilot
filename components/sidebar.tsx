@@ -26,7 +26,7 @@ function Icon({ children }: { children: ReactNode }) {
 const NAV = [
   {
     href: "/today",
-    label: "Today",
+    label: "今日",
     icon: (
       <Icon>
         <circle cx="12" cy="12" r="4" />
@@ -36,7 +36,7 @@ const NAV = [
   },
   {
     href: "/studio",
-    label: "Studio",
+    label: "内容工作台",
     icon: (
       <Icon>
         <path d="M12 19l7-7 3 3-7 7-3-3z" />
@@ -48,7 +48,7 @@ const NAV = [
   },
   {
     href: "/library",
-    label: "Library",
+    label: "材料库",
     icon: (
       <Icon>
         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -57,17 +57,8 @@ const NAV = [
     ),
   },
   {
-    href: "/growth-lead",
-    label: "Growth Lead",
-    icon: (
-      <Icon>
-        <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8A8.5 8.5 0 0 1 12.5 3a8.5 8.5 0 0 1 8.5 8.5Z" />
-      </Icon>
-    ),
-  },
-  {
     href: "/calendar",
-    label: "Calendar",
+    label: "内容日历",
     icon: (
       <Icon>
         <rect x="3" y="4" width="18" height="17" rx="2" />
@@ -76,38 +67,8 @@ const NAV = [
     ),
   },
   {
-    href: "/creator-ip",
-    label: "Creator IP",
-    icon: (
-      <Icon>
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
-      </Icon>
-    ),
-  },
-  {
-    href: "/campaigns",
-    label: "Campaigns",
-    icon: (
-      <Icon>
-        <circle cx="12" cy="12" r="9" />
-        <polyline points="12 7 12 12 15.5 14" />
-      </Icon>
-    ),
-  },
-  {
-    href: "/performance",
-    label: "Performance",
-    icon: (
-      <Icon>
-        <path d="M3 3v18h18" />
-        <path d="M7 15l4-5 3 3 5-7" />
-      </Icon>
-    ),
-  },
-  {
     href: "/settings",
-    label: "Settings",
+    label: "设置",
     icon: (
       <Icon>
         <circle cx="12" cy="12" r="3" />
@@ -142,7 +103,7 @@ function Wordmark() {
           PostPilot
         </span>
         <span className="block text-[11px] leading-tight text-ink-muted">
-          Your AI Growth Lead · sample data
+          内容创作助手 · 演示数据
         </span>
       </span>
     </div>
@@ -178,9 +139,9 @@ export function Sidebar() {
       <div className="mt-auto flex flex-col gap-3 px-3">
         <AccountBox />
         <div className="text-[11px] leading-relaxed text-ink-muted">
-          A Lantr sample project.
+          Lantr 往届学生作品 · 课程结束后继续托管。
           <br />
-          Drafts, not guarantees — you post.
+          初稿由你审核，也由你亲自发布。
         </div>
       </div>
     </aside>
@@ -208,14 +169,14 @@ function AccountBox() {
         <div className="rounded-lg border border-hairline px-3 py-2">
           <div className="truncate text-xs font-medium">{CREATOR.name}</div>
           <div className="mt-0.5 text-xs text-ink-muted">
-            {CREATOR.handle} · demo creator
+            {CREATOR.handle} · 演示创作者
           </div>
         </div>
         <Link
           href="/signin"
           className="btn-ghost px-3 py-2 text-center text-sm font-medium"
         >
-          Sign in
+          登录
         </Link>
       </div>
     );
@@ -228,7 +189,7 @@ function AccountBox() {
         onClick={() => supabase.auth.signOut().then(() => window.location.assign("/"))}
         className="mt-0.5 text-xs text-ink-muted hover:text-ink"
       >
-        Sign out
+        退出登录
       </button>
     </div>
   );

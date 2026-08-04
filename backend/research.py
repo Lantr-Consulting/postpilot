@@ -14,7 +14,7 @@ from urllib.parse import quote_plus
 
 import requests
 
-UA = {"User-Agent": "PostPilot/0.1 (Lantr sample project; contact: hello@lantr.ai)"}
+UA = {"User-Agent": "PostPilot/0.1 (past Lantr student project; contact: hello@lantr.ai)"}
 TIMEOUT = 8
 
 # One shared TTL cache so a classroom of refreshes doesn't hammer free APIs.

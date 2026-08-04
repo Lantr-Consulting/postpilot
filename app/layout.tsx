@@ -22,9 +22,9 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "PostPilot — an AI Growth Lead that knows your story",
+  title: "PostPilot｜Lantr 往届学生作品",
   description:
-    "It learns your IP, mines your raw materials into cited atoms, drafts posts through an editorial engine, and runs campaigns while you're away. Export-only — you press publish. A Lantr sample project.",
+    "一位 Lantr 往届学生完成的内容创作助手：根据用户提供的真实材料寻找选题、准备初稿，并在发布前逐项检查。所有内容仍由用户审核和发布。",
 };
 
 export default function RootLayout({
@@ -34,7 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="zh-CN"
       // data-theme is set pre-paint from localStorage; the server can't know it.
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}

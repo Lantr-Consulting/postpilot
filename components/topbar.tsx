@@ -35,8 +35,8 @@ function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-      title={theme === "light" ? "Dark mode" : "Light mode"}
+      aria-label={theme === "light" ? "切换到深色模式" : "切换到浅色模式"}
+      title={theme === "light" ? "深色模式" : "浅色模式"}
       className="btn-ghost size-8 !rounded-full"
     >
       {theme === null ? null : theme === "light" ? (
@@ -90,7 +90,7 @@ export function TopBar() {
           <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
         </svg>
         <span className="font-medium text-ink">
-          {CREATOR.ipProfile.pillars.length} pillars ·{" "}
+          {CREATOR.ipProfile.pillars.length} 个内容方向 ·{" "}
           {CREATOR.niche.topics[0]}
         </span>
         <span className="text-ink-muted">· {fmtDate(TODAY)}</span>
@@ -103,7 +103,7 @@ export function TopBar() {
               : "border border-hairline text-ink-muted"
           }`}
         >
-          {checking ? "…" : live ? "Live" : "Sample data"}
+          {checking ? "…" : live ? "实时数据" : "演示数据"}
         </span>
         <ThemeToggle />
       </div>

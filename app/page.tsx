@@ -1,29 +1,21 @@
 "use client";
 
-/* Marketing landing at "/" — FORGE design language (matching lantr.site),
-   bilingual EN/中文. The product lives behind it under /today etc. */
+/* Marketing landing at "/" — FORGE design language (matching lantr.site).
+   The product lives behind it under /today etc. */
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import {
-  ColumnRules,
-  LangToggle,
-  persistLang,
-  readLang,
-  Reveal,
-  Words,
-  type Lang,
-} from "@/components/landing/kit";
+import { ColumnRules, Reveal, Words, type Lang } from "@/components/landing/kit";
 
 const COPY = {
   en: {
     nav: { features: "Features", how: "How it works", who: "Who it's for" },
-    hub: "All demos",
+    hub: "Student showcase",
     signIn: "Sign in",
     openApp: "Open the demo",
     openDash: "Open your studio",
-    badge: "A Lantr sample project · Export-only, you press publish",
+    badge: "Past Lantr student project · Hosted demo · Export-only",
     h1: "A growth lead that actually knows your story.",
     subLead: "It studies your background, your narratives, your raw materials, ",
     subEm: "then writes like you",
@@ -85,15 +77,15 @@ const COPY = {
         b: "Post it yourself, log the results, and the loop learns — sounding more like you each round.",
       },
     ],
-    hoodKicker: "Under the hood",
-    hoodTitle: "Built milestone by milestone.",
+    hoodKicker: "How the student built it",
+    hoodTitle: "From a class idea to a live product.",
     hoodBody:
-      "First ship, design pass, brain, hands, memory, autonomy — built in the exact order Lantr students build theirs, with every milestone a public tag on GitHub.",
+      "This project was completed by a past Lantr student. The student shipped a small first version, then added source-grounded drafting, editorial checks, accounts, memory, research workflows, and scheduled campaigns one working milestone at a time. Lantr now hosts the finished work for visitors to explore.",
     hoodLink: "Read the source on GitHub",
-    whoKicker: "Who it's for",
-    whoTitle: "The marketing & media track sample.",
+    whoKicker: "The student's direction",
+    whoTitle: "A creator-and-AI question, taken all the way to launch.",
     whoBody:
-      "Lantr students build a project aimed at their intended major. This one shows what the marketing-and-media direction looks like when it ships.",
+      "The student chose a question at the intersection of storytelling, marketing, and software—and built a product that keeps the creator’s source material and final say at the center.",
     who: [
       {
         t: "Marketing & Communications",
@@ -111,110 +103,111 @@ const COPY = {
     ctaTitle: "Your story, shipped on schedule.",
     ctaBody: "Sign in once and you're signed in across every Lantr demo.",
     footerDisclaimer:
-      "Drafts are suggestions — you review, you publish. A Lantr sample project.",
+      "A past Lantr student project, hosted by Lantr for demonstration. Drafts are suggestions—you review and publish them yourself.",
     footerLinks: "More from Lantr",
   },
   zh: {
-    nav: { features: "功能", how: "运作方式", who: "适合谁" },
-    hub: "全部演示",
+    nav: { features: "主要功能", how: "使用流程", who: "作品方向" },
+    hub: "往届作品",
     signIn: "登录",
-    openApp: "进入演示",
-    openDash: "打开我的工作室",
-    badge: "Lantr 示范项目 · 仅导出，发布权在你",
-    h1: "一位真正懂你故事的 AI 增长负责人。",
-    subLead: "它研读你的背景、你的叙事、你的原始素材，",
-    subEm: "然后像你一样落笔",
+    openApp: "体验作品",
+    openDash: "打开内容工作台",
+    badge: "Lantr 往届学生作品 · 草稿由用户审核 · 不会自动发布",
+    h1: "让 AI 帮你写内容，但每个故事都来自你自己。",
+    subLead: "把访谈、笔记和旧内容交给它，",
+    subEm: "它只从你的真实材料里找选题、写初稿",
     subRest:
-      "——沉淀出带版本管理的品牌手册，每篇草稿都引用你亲口说过的话。你来审核、你来导出，发布键永远在你手里。",
-    ctaPrimary: "进入在线演示",
-    ctaSecondary: "免费创建账户",
+      "。每篇内容都会注明用了哪些材料，最后仍由你修改、审核和发布。",
+    ctaPrimary: "开始体验",
+    ctaSecondary: "注册体验账户",
     trust: [
-      "绝不虚构你的故事——每篇草稿都引用你的素材",
-      "编辑引擎强制执行 FTC 披露与平台规则",
-      "仅导出：人是最终的执行者",
+      "只使用你提供的真实材料",
+      "发布前逐条检查内容规则",
+      "只生成和导出，不会自动发布",
     ],
-    frameCaption: "仅导出——发布键在你手里。",
-    featuresKicker: "它能做什么",
-    featuresTitle: "是增长负责人，不是文案生成器。",
+    frameCaption: "学生完成的产品界面：整理材料、准备初稿和审核内容都在同一个工作台里。",
+    featuresKicker: "学生做了什么",
+    featuresTitle: "从整理材料到准备发布，把繁琐的工作串起来。",
     features: [
       {
-        t: "一本带版本的品牌手册",
-        b: "你的声音、叙事线和定位，沉淀成一份持续生长的文档——每次修改都有版本记录，随时可以回滚。",
+        t: "整理一份长期使用的品牌资料",
+        b: "把表达方式、个人经历和内容方向整理成一份资料。每次修改都有记录，需要时可以恢复旧版本。",
       },
       {
-        t: "它挖掘素材，而不是凭空想象",
-        b: "上传访谈记录、笔记、旧帖子，它会把素材提炼成带标签的内容原子；每篇草稿都必须引用它们。",
+        t: "只从材料里找内容，不凭空编造",
+        b: "上传访谈、笔记和旧帖子后，产品会整理出可以引用的事实和故事。每篇初稿都会注明用了哪些材料。",
       },
       {
-        t: "写进代码的编辑规范",
-        b: "FTC 16 CFR 255 广告披露、平台字数限制、违禁词、重复检测——都是有出处的规则，由代码强制执行，而不是靠模型自觉。",
+        t: "发布前自动检查",
+        b: "广告内容是否需要说明、字数是否超限、有没有不该出现的表达、内容是否重复，都会在交给你之前先检查一遍。",
       },
       {
-        t: "你所在赛道的雷达",
-        b: "来自 Bluesky、Reddit、Google News 与 Google Trends 的实时信号，让每个选题都落在你的赛道上。",
+        t: "跟进你所在领域的动态",
+        b: "产品会参考 Bluesky、Reddit、Google News 和 Google Trends 的公开信息，帮助你找到值得讨论的新话题。",
       },
       {
-        t: "增长复盘",
-        b: "它定期提出策略调整建议；你采纳的每一条，都会作为经验写回品牌手册。",
+        t: "定期回顾哪些内容有效",
+        b: "根据你记录的发布结果，产品会提出调整建议。你确认采用后，这些经验会写回品牌资料。",
       },
       {
-        t: "你不在时，它照常开工",
-        b: "定时执行的研究与起草任务。等你回来时，草稿已经排好队待审。",
+        t: "按计划提前准备内容",
+        b: "可以设置定时研究和写作任务。等你回来时，初稿已经准备好，只等你检查。",
       },
     ],
-    howKicker: "运作方式",
-    howTitle: "四个步骤，一个闭环。",
+    howKicker: "实际怎么用",
+    howTitle: "先让它了解你，再一起把内容做出来。",
     how: [
       {
-        t: "创建账户",
-        b: "你会得到一位空白的增长负责人——完成“面谈”并经你确认后才会激活。",
+        t: "注册账户",
+        b: "通过简单的引导填写基本信息，完成后再开始使用内容助手。",
       },
       {
-        t: "教它你的 IP",
-        b: "讲述你的背景与叙事，上传素材。它起草品牌手册，经你确认才生效。",
+        t: "告诉它你想做怎样的内容",
+        b: "介绍自己的经历、表达方式和内容方向，再上传可以使用的材料。整理好的品牌资料由你确认。",
       },
       {
-        t: "它研究并起草",
-        b: "选题必须引用内容原子，草稿逐条通过编辑引擎检查后才会送到你面前。",
+        t: "找选题、写初稿",
+        b: "产品会从真实材料和近期动态中找选题，写好初稿后再逐条检查。",
       },
       {
-        t: "你审核并导出",
-        b: "亲手发布，回填数据，循环学习——每一轮都更像你。",
+        t: "你审核，再发布",
+        b: "修改满意后再导出和发布。之后可以记录效果，供下一轮内容参考。",
       },
     ],
-    hoodKicker: "技术底层",
-    hoodTitle: "按里程碑逐步构建。",
+    hoodKicker: "作品是怎么完成的",
+    hoodTitle: "从第一版网页，一步步做到可以使用。",
     hoodBody:
-      "首次上线、设计打磨、大脑、双手、记忆、自主运行——与 Lantr 学员的构建路径完全一致，每个里程碑都是 GitHub 上公开的 tag。",
+      "这是一位 Lantr 往届学生完成的项目。学生先做出可以操作的第一版，再逐步加入材料整理、内容写作、发布前检查、用户账户和定时任务。课程结束后，Lantr 继续托管这件作品，供访客体验。",
     hoodLink: "在 GitHub 阅读源码",
-    whoKicker: "适合谁",
-    whoTitle: "市场营销与媒体方向的示范作品。",
+    whoKicker: "学生为什么选择这个题目",
+    whoTitle: "既想让 AI 提高效率，也不想让它替创作者编故事。",
     whoBody:
-      "Lantr 学员会围绕自己的目标专业打造项目。这个项目展示了市场营销与媒体方向做出来是什么样子。",
+      "学生关注的是：怎样让 AI 分担整理和写作工作，同时保留内容的真实性。因此，这件作品不只是生成文案，还把材料、选题、初稿、审核和发布前检查连成了一套产品。",
     who: [
       {
         t: "市场营销与传播",
-        b: "品牌策略、定位与编辑流水线——不是 PPT，而是真正跑起来的软件。",
+        b: "把品牌定位、选题和编辑流程做成可以操作的软件，而不只是一份策划案。",
       },
       {
         t: "商业与创业",
-        b: "创作者经济的增长闭环：策略、执行、可衡量的结果。",
+        b: "把内容策略、执行记录和效果回顾放进同一套工作流程。",
       },
       {
         t: "计算机与人工智能",
-        b: "上下文工程、不用向量数据库的检索，以及围绕 LLM 的确定性规则引擎。",
+        b: "处理大量文字材料，让 AI 能找到相关内容，并在生成结果之外加入明确的检查规则。",
       },
     ],
-    ctaTitle: "你的故事，按时发布。",
-    ctaBody: "登录一次，即可通行所有 Lantr 演示项目。",
+    ctaTitle: "让 AI 帮忙，但故事和发布权仍然属于你。",
+    ctaBody: "使用同一个体验账户，也可以继续查看另外两件往届学生作品。",
     footerDisclaimer:
-      "草稿只是建议——审核与发布都由你完成。Lantr 示范项目。",
-    footerLinks: "更多 Lantr 项目",
+      "Lantr 往届学生作品，由 Lantr 继续托管。所有初稿都由用户审核并自行发布，产品不会自动发布。",
+    footerLinks: "更多学生作品",
   },
 } as const;
 
 /* A stylized still of the product — the ink-and-paper desk, kept light. */
-function ProductFrame() {
+function ProductFrame({ lang }: { lang: Lang }) {
+  const zh = lang === "zh";
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--lp-line-strong)] bg-[#f6f4ef] text-left shadow-[0_1px_2px_rgba(30,28,23,0.06),0_40px_80px_-40px_rgba(30,28,23,0.4)]">
       {/* window chrome */}
@@ -230,7 +223,7 @@ function ProductFrame() {
         {/* atom pane — the creator's own words on a ruled index card */}
         <div className="bg-[#f6f4ef] p-5 sm:p-6">
           <div className="lp-mono text-[10px] uppercase tracking-[0.14em] text-[#8d887b]">
-            Library · atom #14
+            {zh ? "材料库 · 条目 #14" : "Library · atom #14"}
           </div>
           <div
             className="mt-3 rounded-xl border border-[#211f1a1f] bg-white p-4"
@@ -240,16 +233,16 @@ function ProductFrame() {
             }}
           >
             <p className="lp-display text-[15px] italic leading-[28px] text-[#2c2a24]">
-              “The day I benched 315 after my back injury, I cried in my car.
-              Not because of the number — because I'd kept a promise to
-              myself for 14 months straight.”
+              {zh
+                ? "“背伤以后第一次推起 315 磅的那天，我坐在车里哭了。不是因为这个数字，而是因为我整整 14 个月都没有放弃对自己的承诺。”"
+                : "“The day I benched 315 after my back injury, I cried in my car. Not because of the number — because I’d kept a promise to myself for 14 months straight.”"}
             </p>
             <div className="lp-mono mt-3 text-[10px] text-[#8d887b]">
-              from “podcast-transcript-march.txt”
+              {zh ? "摘自“3 月播客访谈.txt”" : "from “podcast-transcript-march.txt”"}
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {["story", "injury-comeback", "vulnerability"].map((t) => (
+            {(zh ? ["亲身经历", "伤后恢复", "真实感受"] : ["story", "injury-comeback", "vulnerability"]).map((t) => (
               <span
                 key={t}
                 className="lp-mono rounded-full border border-[#3a55d94d] bg-[#3a55d90d] px-2.5 py-1 text-[10px] text-[#3a55d9]"
@@ -262,20 +255,20 @@ function ProductFrame() {
         {/* draft pane — editorial checks + approve/export */}
         <div className="bg-[#fbfaf7] p-5 sm:p-6">
           <div className="lp-mono text-[10px] uppercase tracking-[0.14em] text-[#8d887b]">
-            Draft · LinkedIn · cites atom #14
+            {zh ? "初稿 · LinkedIn · 使用材料 #14" : "Draft · LinkedIn · cites atom #14"}
           </div>
           <div className="mt-3 rounded-xl border border-[#211f1a1f] bg-white p-4">
             <p className="text-[13px] leading-relaxed text-[#2c2a24]">
-              Fourteen months ago I couldn't tie my shoes without wincing.
-              Yesterday I benched 315. The number isn't the point — the
-              promise is. Here's the exact rehab protocol I followed…
+              {zh
+                ? "14 个月前，我弯腰系鞋带都会疼。昨天，我推起了 315 磅。重要的不是这个数字，而是我没有放弃当初的承诺。下面是我一直坚持的恢复计划……"
+                : "Fourteen months ago I couldn’t tie my shoes without wincing. Yesterday I benched 315. The number isn’t the point — the promise is. Here’s the exact rehab protocol I followed…"}
             </p>
             <ul className="mt-3 space-y-1.5">
               {[
-                ["Platform limit — 3,000 chars", true],
-                ["No banned phrases", true],
-                ["Atom citation resolves", true],
-                ["Sponsored — FTC disclosure added", false],
+                [zh ? "符合平台 3,000 字符限制" : "Platform limit — 3,000 chars", true],
+                [zh ? "没有使用禁用表达" : "No banned phrases", true],
+                [zh ? "引用的材料可以找到" : "Atom citation resolves", true],
+                [zh ? "含推广内容，需要补充说明" : "Sponsored — FTC disclosure added", false],
               ].map(([c, ok]) => (
                 <li
                   key={c as string}
@@ -305,15 +298,15 @@ function ProductFrame() {
             </ul>
             <div className="mt-4 flex gap-2">
               <span className="inline-flex flex-1 items-center justify-center rounded-full bg-[#3a55d9] px-3 py-1.5 text-[12px] font-semibold text-white">
-                Approve
+                {zh ? "通过" : "Approve"}
               </span>
               <span className="inline-flex flex-1 items-center justify-center rounded-full border border-[#211f1a2b] px-3 py-1.5 text-[12px] font-medium text-[#54514a]">
-                Export
+                {zh ? "导出" : "Export"}
               </span>
             </div>
           </div>
           <p className="lp-mono mt-3 text-[10px] leading-relaxed text-[#a09b8d]">
-            You post it. You own it.
+            {zh ? "由你审核，也由你亲自发布。" : "You post it. You own it."}
           </p>
         </div>
       </div>
@@ -322,20 +315,15 @@ function ProductFrame() {
 }
 
 export default function Landing() {
-  const [lang, setLang] = useState<Lang>("en");
+  const lang: Lang = "zh";
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
-    setLang(readLang());
+    document.documentElement.lang = "zh-CN";
     supabase.auth.getSession().then(({ data }) => {
       setSignedIn(Boolean(data.session));
     });
   }, []);
-
-  function switchLang(l: Lang) {
-    setLang(l);
-    persistLang(l);
-  }
 
   const c = COPY[lang];
 
@@ -369,7 +357,6 @@ export default function Landing() {
             </a>
           </nav>
           <div className="ml-auto flex items-center gap-2.5">
-            <LangToggle lang={lang} onChange={switchLang} />
             {signedIn ? (
               <Link href="/today" className="lp-btn h-9 px-4 text-[13px]">
                 {c.openDash}
@@ -394,45 +381,47 @@ export default function Landing() {
       {/* ── hero ─────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
         <ColumnRules />
-        <div className="relative mx-auto w-full max-w-6xl px-5 pb-16 pt-16 text-center sm:px-8 sm:pt-24">
-          <Reveal>
-            <span className="lp-mono inline-flex items-center gap-2 rounded-full border border-[var(--lp-line-strong)] bg-[var(--lp-surface)] px-4 py-2 text-[11px] font-medium text-[var(--lp-muted)]">
-              <span aria-hidden className="size-1.5 rounded-full bg-[var(--lp-accent)]" />
-              {c.badge}
-            </span>
-          </Reveal>
-          <h1 className="lp-display mx-auto mt-7 max-w-3xl text-balance text-[2.5rem] font-normal leading-[1.07] tracking-[-0.015em] text-[var(--lp-fg)] sm:text-[3.9rem]">
-            <Words text={c.h1} delay={120} />
-          </h1>
-          <Reveal delay={200}>
-            <p className="mx-auto mt-7 max-w-2xl text-pretty text-base leading-relaxed text-[var(--lp-muted)] sm:text-lg">
-              {c.subLead}
-              <em className="lp-display italic text-[var(--lp-ink)]">{c.subEm}</em>
-              {c.subRest}
-            </p>
-          </Reveal>
-          <Reveal delay={280}>
-            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/today" className="lp-btn h-12 px-6 text-[15px]">
-                {c.ctaPrimary} →
-              </Link>
-              <Link href="/signin" className="lp-btn-ghost h-12 px-6 text-[15px]">
-                {c.ctaSecondary}
-              </Link>
-            </div>
-          </Reveal>
-          <Reveal delay={360}>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-[13px] text-[var(--lp-muted)]">
-              {c.trust.map((t) => (
-                <span key={t} className="flex items-center gap-2">
-                  <span aria-hidden className="h-1 w-1 rounded-full bg-[var(--lp-accent)]" />
-                  {t}
-                </span>
-              ))}
-            </div>
-          </Reveal>
-          <Reveal delay={440} className="mx-auto mt-12 max-w-4xl">
-            <ProductFrame />
+        <div className="relative mx-auto grid w-full max-w-6xl items-center gap-12 px-5 pb-16 pt-16 sm:px-8 sm:pt-20 lg:grid-cols-[0.95fr_1.05fr] lg:gap-12 lg:pb-20">
+          <div>
+            <Reveal>
+              <span className="lp-mono inline-flex items-center gap-2 rounded-full border border-[var(--lp-line-strong)] bg-[var(--lp-surface)] px-4 py-2 text-[11px] font-medium text-[var(--lp-muted)]">
+                <span aria-hidden className="size-1.5 rounded-full bg-[var(--lp-accent)]" />
+                {c.badge}
+              </span>
+            </Reveal>
+            <h1 className="lp-display mt-7 max-w-3xl text-balance text-[2.6rem] font-normal leading-[1.04] tracking-[-0.02em] text-[var(--lp-fg)] sm:text-[4rem] lg:text-[3.8rem]">
+              <Words text={c.h1} delay={120} />
+            </h1>
+            <Reveal delay={200}>
+              <p className="mt-7 max-w-xl text-pretty text-base leading-relaxed text-[var(--lp-muted)] sm:text-lg">
+                {c.subLead}
+                <em className="lp-display italic text-[var(--lp-ink)]">{c.subEm}</em>
+                {c.subRest}
+              </p>
+            </Reveal>
+            <Reveal delay={280}>
+              <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row">
+                <Link href="/today" className="lp-btn h-12 px-6 text-[15px]">
+                  {c.ctaPrimary} →
+                </Link>
+                <Link href="/signin" className="lp-btn-ghost h-12 px-6 text-[15px]">
+                  {c.ctaSecondary}
+                </Link>
+              </div>
+            </Reveal>
+            <Reveal delay={360}>
+              <div className="mt-8 grid gap-2 text-[13px] text-[var(--lp-muted)]">
+                {c.trust.map((t) => (
+                  <span key={t} className="flex items-center gap-2">
+                    <span aria-hidden className="h-1 w-1 rounded-full bg-[var(--lp-accent)]" />
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+          <Reveal delay={360} className="min-w-0 lg:-mr-14">
+            <ProductFrame lang={lang} />
             <p className="lp-mono mt-3 text-[11px] text-[var(--lp-faint)]">
               {c.frameCaption}
             </p>
@@ -626,7 +615,7 @@ export default function Landing() {
                 <ul className="mt-3 space-y-1.5 text-[13px] text-[var(--lp-muted)]">
                   <li>
                     <a href="https://lantr.site" className="hover:text-[var(--lp-fg)]">
-                      lantr.site — demo hub
+                      lantr.site — 学生作品展
                     </a>
                   </li>
                   <li>

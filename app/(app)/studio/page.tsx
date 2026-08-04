@@ -31,8 +31,8 @@ const SOURCE_LABEL: Record<TrendSource, string> = {
   youtube: "YouTube",
   reddit: "Reddit",
   bluesky: "Bluesky",
-  news: "News",
-  trends: "Trends",
+  news: "新闻",
+  trends: "搜索趋势",
 };
 
 function apiMessage(e: unknown, fallback: string): string {
@@ -74,23 +74,23 @@ export default function StudioPage() {
 
   async function research() {
     if (!live) {
-      toast("info", "Sign in to build your own pipeline — this is sample data.");
+      toast("info", "登录后可以建立自己的创作流程；当前显示的是演示数据。");
       return;
     }
     setResearching(true);
-    setRunProgress("Claiming the run…");
+    setRunProgress("正在准备研究任务…");
     try {
       const run = await runResearch();
       setRunId(run.id);
-      const done = await pollRun(run.id, (r) => setRunProgress(r.progress || "Working…"));
+      const done = await pollRun(run.id, (r) => setRunProgress(r.progress || "正在研究…"));
       await refresh();
       if (done.status === "done") {
-        toast("success", done.report ?? "Research done.");
+        toast("success", done.report ?? "研究完成。" );
       } else {
-        toast("error", done.report ?? "The run failed — try again.");
+        toast("error", done.report ?? "研究没有完成，请重试。" );
       }
     } catch (e) {
-      toast("error", apiMessage(e, "Couldn't start the run."));
+      toast("error", apiMessage(e, "无法开始研究，请稍后重试。"));
     }
     setResearching(false);
     setRunId(null);
@@ -103,15 +103,15 @@ export default function StudioPage() {
     setSteerNote("");
     try {
       await steerRun(runId, note);
-      toast("info", "Steering noted — the run reads it before shaping ideas.");
+      toast("info", "补充要求已保存，整理选题前会先读取。" );
     } catch {
-      toast("info", "Too late — that run already finished.");
+      toast("info", "这次研究已经结束，可以在下一次研究前补充要求。" );
     }
   }
 
   async function decideIdea(id: string, status: "accepted" | "declined") {
     if (status === "declined") {
-      const reason = window.prompt("Why? Your reason becomes a standing lesson.");
+      const reason = window.prompt("为什么不采用？这个原因会成为下次研究的参考。" );
       if (reason === null) return;
       if (live) {
         await declineIdea(id, reason).catch(() => {});
@@ -121,7 +121,7 @@ export default function StudioPage() {
           xs.map((i) => (i.id === id ? { ...i, status, declineReason: reason } : i))
         );
       }
-      toast("info", "Declined — the reason feeds the next research run.");
+      toast("info", "已标记为不采用，下次研究会参考你填写的原因。" );
       return;
     }
     if (live) {
@@ -129,14 +129,14 @@ export default function StudioPage() {
       try {
         const { drafts: fresh } = await acceptIdea(id);
         await refresh();
-        toast("success", `${fresh.length} platform variants drafted and checked.`);
+        toast("success", `已为 ${fresh.length} 个平台准备初稿并完成检查。`);
       } catch (e) {
-        toast("error", apiMessage(e, "Drafting failed — try accepting again."));
+        toast("error", apiMessage(e, "初稿生成失败，请重新尝试。"));
       }
       setDraftingIdea(null);
     } else {
       setMockIdeas((xs) => xs.map((i) => (i.id === id ? { ...i, status } : i)));
-      toast("success", "Idea accepted — drafts will appear below. (Sample data)");
+      toast("success", "选题已采用，初稿会显示在下方。（演示数据）" );
     }
   }
 
@@ -145,10 +145,10 @@ export default function StudioPage() {
     if (live) {
       await editDraft(d.id, text).catch(() => {});
       await refresh();
-      toast("info", "Edited — the engine re-checked your text.");
+      toast("info", "修改已保存，产品已经重新检查文字。" );
     } else {
       setMockDrafts((xs) => xs.map((x) => (x.id === d.id ? { ...x, text } : x)));
-      toast("info", "Edited — approve to re-run the checks.");
+      toast("info", "修改已保存；通过初稿时会再次检查。" );
     }
   }
 
@@ -157,7 +157,7 @@ export default function StudioPage() {
       setMockDrafts((xs) =>
         xs.map((x) => (x.id === d.id ? { ...x, status: "approved" } : x))
       );
-      toast("success", "Approved — the engine re-checked the final text.");
+      toast("success", "初稿已通过，最终文字已重新检查。" );
       return;
     }
     setBusyDraft(d.id);
@@ -165,18 +165,18 @@ export default function StudioPage() {
       const { blockedChecks } = await approveDraft(d.id, d.text);
       await refresh();
       if (blockedChecks) {
-        toast("error", "The editorial engine blocked this draft — see the flagged checks.");
+        toast("error", "这篇初稿还有未通过的检查，请先处理标记项。" );
       } else {
-        toast("success", "Approved and slotted on the calendar.");
+        toast("success", "初稿已通过并排入内容日历。" );
       }
     } catch {
-      toast("error", "Approve failed — is the backend up?");
+      toast("error", "无法通过这篇初稿，请稍后重试。" );
     }
     setBusyDraft(null);
   }
 
   async function decline(d: Draft) {
-    const reason = window.prompt("Why? Your reason becomes a standing lesson.");
+    const reason = window.prompt("为什么不采用？这个原因会成为下次写作的参考。" );
     if (reason === null) return;
     if (live) {
       await declineDraft(d.id, reason).catch(() => {});
@@ -186,7 +186,7 @@ export default function StudioPage() {
         xs.map((x) => (x.id === d.id ? { ...x, status: "declined" } : x))
       );
     }
-    toast("info", "Declined — the reason feeds back into generation.");
+    toast("info", "已标记为不采用，下次写作会参考这个原因。" );
   }
 
   async function copyExport(d: Draft) {
@@ -200,30 +200,30 @@ export default function StudioPage() {
         xs.map((x) => (x.id === d.id ? { ...x, status: "exported" } : x))
       );
     }
-    toast("success", "Copied to your clipboard. Go post it!");
+    toast("success", "内容已复制，请前往对应平台发布。" );
   }
 
-  const knownAtoms = new Map(atoms.map((a) => [a.id, a.materialTitle]));
+  const knownAtoms = new Map(atoms.map((a) => [a.id, a]));
 
   return (
     <div className="flex flex-col gap-5">
       <SectionHeading
-        title="Studio"
-        sub="Niche radar → ideas with evidence → checked drafts you approve and export."
+        title="内容工作台"
+        sub="查看近期动态和真实材料，确认选题，审核初稿，再由你亲自导出和发布。"
       />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
         <div className="flex flex-col gap-5">
           {/* Ideas */}
           <Card
-            title="Ideas"
+            title="待确认的选题"
             action={
               <button
                 onClick={research}
                 disabled={researching}
                 className="btn-primary px-3.5 py-1.5 text-xs"
               >
-                {researching ? "Running…" : "Run research"}
+                {researching ? "正在研究…" : "开始研究"}
               </button>
             }
           >
@@ -231,26 +231,25 @@ export default function StudioPage() {
               <div className="index-card mb-4 rounded-xl p-3.5">
                 <p className="flex items-center gap-2 text-xs text-ink-2">
                   <span aria-hidden className="inline-block size-2 animate-pulse rounded-full bg-accent" />
-                  {runProgress || "Working…"}
+                  {runProgress || "正在研究…"}
                 </p>
                 <div className="mt-2.5 flex gap-2">
                   <input
                     value={steerNote}
                     onChange={(e) => setSteerNote(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && sendSteer()}
-                    placeholder='Steer it mid-run — "focus on the newsletter angle"'
+                    placeholder="补充要求，例如：更关注邮件通讯的角度"
                     className="flex-1 rounded-full border border-hairline bg-page px-3.5 py-1.5 text-xs text-ink placeholder:text-ink-muted"
                   />
                   <button onClick={sendSteer} className="btn-ghost px-3 py-1.5 text-xs">
-                    Steer
+                    发送
                   </button>
                 </div>
               </div>
             )}
             {ideas.length === 0 ? (
               <p className="text-sm text-ink-muted">
-                No ideas yet. Run research — the agent scans your niche and
-                your Library, and comes back with evidence.
+                还没有选题。开始研究后，产品会查看近期动态和材料库，并说明每个选题的依据。
               </p>
             ) : (
               <ul className="flex flex-col gap-3">
@@ -263,7 +262,7 @@ export default function StudioPage() {
                           {idea.pillar}
                           {idea.narrative && (
                             <span className="rounded-full bg-atom-quote/15 px-2 py-0.5 text-[10px] font-medium text-atom-quote">
-                              arc: {idea.narrative}
+                              故事线：{idea.narrative}
                             </span>
                           )}
                         </div>
@@ -283,7 +282,7 @@ export default function StudioPage() {
                                 : "bg-wash-2 text-ink-2"
                             }`}
                           >
-                            {e.atomId ? "Your material" : e.source}
+                            {e.atomId ? "你的材料" : e.source}
                           </span>
                           <span className="text-ink-muted">{e.datum}</span>
                         </li>
@@ -291,7 +290,7 @@ export default function StudioPage() {
                     </ul>
                     {idea.declineReason && (
                       <p className="mt-2 rounded-lg bg-wash px-3 py-2 text-xs text-ink-muted">
-                        Standing lesson: {idea.declineReason}
+                        下次研究需要注意：{idea.declineReason}
                       </p>
                     )}
                     {idea.status === "proposed" && (
@@ -302,14 +301,14 @@ export default function StudioPage() {
                           className="btn-primary px-3.5 py-1.5 text-xs"
                         >
                           {draftingIdea === idea.id
-                            ? "Drafting variants…"
-                            : "Accept → draft it"}
+                            ? "正在准备初稿…"
+                            : "采用并生成初稿"}
                         </button>
                         <button
                           onClick={() => decideIdea(idea.id, "declined")}
                           className="btn-ghost px-3.5 py-1.5 text-xs"
                         >
-                          Decline…
+                          不采用…
                         </button>
                       </div>
                     )}
@@ -320,11 +319,10 @@ export default function StudioPage() {
           </Card>
 
           {/* Drafts */}
-          <Card title="Drafts">
+          <Card title="待审核的初稿">
             {drafts.length === 0 ? (
               <p className="text-sm text-ink-muted">
-                Accept an idea above and its platform variants land here,
-                each already checked by the editorial engine.
+                采用上方选题后，不同平台的初稿会出现在这里，并先完成内容规则检查。
               </p>
             ) : (
               <ul className="flex flex-col gap-3">
@@ -332,7 +330,7 @@ export default function StudioPage() {
                   const blocked = d.checks.some((c) => !c.pass);
                   const cited = d.atomIds
                     .map((id) => knownAtoms.get(id))
-                    .filter((v, i, s): v is string => !!v && s.indexOf(v) === i);
+                    .filter((v) => Boolean(v));
                   return (
                     <li
                       key={d.id}
@@ -343,7 +341,7 @@ export default function StudioPage() {
                           <PlatformChip platform={d.platform} />
                           {d.sponsored && (
                             <span className="rounded-full bg-critical/15 px-2 py-0.5 text-[11px] font-semibold text-critical">
-                              Sponsored
+                              含推广内容
                             </span>
                           )}
                           <span className="truncate text-xs text-ink-muted">
@@ -374,7 +372,15 @@ export default function StudioPage() {
 
                       {cited.length > 0 && (
                         <p className="mt-2 text-xs text-ink-muted">
-                          Grounded in: {cited.join(" · ")}
+                          使用材料：{" "}
+                          {cited.map((a, index) => a && (
+                            <span key={a.id}>
+                              {index > 0 && " · "}
+                              <a href={`/library#${a.id}`} className="underline underline-offset-2 hover:text-ink">
+                                {a.materialTitle}
+                              </a>
+                            </span>
+                          ))}
                         </p>
                       )}
 
@@ -390,21 +396,21 @@ export default function StudioPage() {
                                 onClick={() => approve(d)}
                                 disabled={blocked || busyDraft === d.id}
                                 className="btn-primary px-3.5 py-1.5 text-xs"
-                                title={blocked ? "Fix the flagged checks first" : undefined}
+                                title={blocked ? "请先处理未通过的检查" : undefined}
                               >
-                                {busyDraft === d.id ? "Checking…" : "Approve"}
+                                {busyDraft === d.id ? "正在检查…" : "通过"}
                               </button>
                               <button
                                 onClick={() => setEditing(d.id)}
                                 className="btn-ghost px-3.5 py-1.5 text-xs"
                               >
-                                Edit
+                                修改
                               </button>
                               <button
                                 onClick={() => decline(d)}
                                 className="btn-ghost px-3.5 py-1.5 text-xs"
                               >
-                                Decline
+                                不采用
                               </button>
                             </>
                           )}
@@ -413,12 +419,12 @@ export default function StudioPage() {
                               onClick={() => copyExport(d)}
                               className="btn-primary px-3.5 py-1.5 text-xs"
                             >
-                              Copy &amp; export
+                              复制并导出
                             </button>
                           )}
                           {blocked && (
                             <span className="self-center text-xs text-critical">
-                              Blocked by the editorial engine until flags clear.
+                              处理完标记项后才能通过。
                             </span>
                           )}
                         </div>
@@ -434,12 +440,12 @@ export default function StudioPage() {
         {/* Niche radar rail */}
         <div className="flex flex-col gap-5">
           <Card
-            title="Niche radar"
+            title="选题动态"
             action={
               <span
                 className={`text-xs font-medium ${radarLive ? "text-good" : "text-ink-muted"}`}
               >
-                {radarLive ? "live" : "sample"}
+                {radarLive ? "实时" : "演示"}
               </span>
             }
           >

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { patchSettings } from "@/lib/api";
 import { useMe } from "@/lib/use-me";
@@ -33,7 +34,7 @@ export default function SettingsPage() {
   function save(fields: Parameters<typeof patchSettings>[0]) {
     if (!me) return;
     patchSettings(fields).catch(() =>
-      toast("error", "Save failed — is the backend up?")
+      toast("error", "保存失败，请稍后重试。" )
     );
   }
 
@@ -43,7 +44,7 @@ export default function SettingsPage() {
       : [...platforms, p];
     setPlatforms(next);
     save({ platforms: next });
-    toast("info", "Saved — drafts are tailored to your enabled platforms.");
+    toast("info", "已保存，之后会为启用的平台分别准备初稿。" );
   }
 
   function addPhrase() {
@@ -58,20 +59,20 @@ export default function SettingsPage() {
         bannedPhrases: next,
       },
     });
-    toast("success", `"${phrase}" banned — the engine enforces it, not the prompt.`);
+    toast("success", `已禁用“${phrase}”，发布前检查会自动识别。`);
   }
 
   return (
     <div className="flex flex-col gap-5">
       <SectionHeading
-        title="Settings"
-        sub="You own every rule. The editorial engine enforces what you bless — in code, not in the prompt."
+        title="设置"
+        sub="你可以决定哪些平台需要初稿、哪些表达不能出现，以及什么时候暂停所有任务。"
       />
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="Editorial rules">
+        <Card title="内容检查规则">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-            Banned phrases
+            禁用表达
           </h3>
           <div className="mt-2 flex flex-wrap gap-2">
             {banned.map((p) => (
@@ -86,9 +87,9 @@ export default function SettingsPage() {
                       bannedPhrases: next,
                     },
                   });
-                  toast("info", `"${p}" un-banned.`);
+                  toast("info", `已允许使用“${p}”。`);
                 }}
-                title="Click to remove"
+                title="点击移除"
                 className="group rounded-full bg-surface-2 px-3 py-1 text-xs text-ink-2 hover:bg-critical/15 hover:text-critical"
               >
                 {p} <span className="text-ink-muted group-hover:text-critical">×</span>
@@ -100,30 +101,30 @@ export default function SettingsPage() {
               value={newPhrase}
               onChange={(e) => setNewPhrase(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addPhrase()}
-              placeholder="Add a phrase to ban…"
+              placeholder="添加不希望出现的表达…"
               className="flex-1 rounded-full border border-hairline bg-page px-3.5 py-1.5 text-xs text-ink placeholder:text-ink-muted"
             />
             <button onClick={addPhrase} className="btn-ghost px-3.5 py-1.5 text-xs">
-              Ban it
+              添加
             </button>
           </div>
 
           <div className="mt-5 grid grid-cols-3 gap-3 border-t border-hairline pt-4 text-sm">
             <div>
-              <div className="text-xs text-ink-muted">Sponsored tag</div>
+              <div className="text-xs text-ink-muted">推广内容标记</div>
               <div className="mt-1 font-semibold">
                 {CREATOR.editorialRules.sponsoredDisclosure}
               </div>
               <div className="mt-0.5 text-[10px] text-ink-muted">16 CFR 255</div>
             </div>
             <div>
-              <div className="text-xs text-ink-muted">Max hashtags</div>
+              <div className="text-xs text-ink-muted">最多话题标签</div>
               <div className="mt-1 font-semibold">
                 {CREATOR.editorialRules.maxHashtags}
               </div>
             </div>
             <div>
-              <div className="text-xs text-ink-muted">Max emoji</div>
+              <div className="text-xs text-ink-muted">最多表情符号</div>
               <div className="mt-1 font-semibold">
                 {CREATOR.editorialRules.maxEmoji}
               </div>
@@ -132,9 +133,9 @@ export default function SettingsPage() {
         </Card>
 
         <div className="flex flex-col gap-5">
-          <Card title="Platforms">
+          <Card title="发布平台">
             <p className="text-xs text-ink-muted">
-              Every approved idea gets a tailored variant per enabled platform.
+              采用选题后，产品会按照已启用平台的格式分别准备初稿。当前版本面向国际内容平台，所有内容都由用户自行发布。
             </p>
             <div className="mt-3 flex flex-col gap-2">
               {ALL_PLATFORMS.map((p) => {
@@ -151,7 +152,7 @@ export default function SettingsPage() {
                     <span
                       className={`text-xs font-medium ${on ? "text-good" : "text-ink-muted"}`}
                     >
-                      {on ? "On" : "Off"}
+                      {on ? "已启用" : "未启用"}
                     </span>
                   </button>
                 );
@@ -159,24 +160,26 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card title="LLM key">
-            <p className="text-xs leading-relaxed text-ink-muted">
-              Bring your own key, or use the shared demo brain. Keys live in
-              your account only — never in code, never on GitHub.
-            </p>
-            <input
-              type="password"
-              placeholder="sk-… (arrives with accounts at Milestone 5)"
-              disabled
-              className="mt-3 w-full rounded-lg border border-hairline bg-page px-3.5 py-2 text-sm text-ink placeholder:text-ink-muted disabled:opacity-50"
-            />
+          <Card title="更多工具">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                ["/creator-ip", "内容档案", "管理个人经历、表达方式和内容方向"],
+                ["/growth-lead", "内容顾问", "讨论选题并查看定期回顾"],
+                ["/campaigns", "定时任务", "安排定期研究和内容准备"],
+                ["/performance", "内容表现", "记录发布结果并回顾哪些内容有效"],
+              ].map(([href, title, body]) => (
+                <Link key={href} href={href} className="rounded-xl bg-surface-2 p-3 transition-colors hover:bg-wash-2">
+                  <span className="block text-sm font-semibold">{title}</span>
+                  <span className="mt-1 block text-xs leading-5 text-ink-muted">{body}</span>
+                </Link>
+              ))}
+            </div>
           </Card>
 
-          <Card title="Kill switch">
+          <Card title="暂停所有任务">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs leading-relaxed text-ink-muted">
-                Pause everything: no runs, no campaigns, no drafts. Your data
-                stays put.
+                暂停后不会继续研究、运行定时任务或生成初稿，已有数据会保留。
               </p>
               <button
                 role="switch"
@@ -184,7 +187,7 @@ export default function SettingsPage() {
                 onClick={() => {
                   setPaused(!paused);
                   save({ paused: !paused });
-                  toast(paused ? "success" : "info", paused ? "Resumed." : "Paused — all agent activity stops.");
+                  toast(paused ? "success" : "info", paused ? "任务已恢复。" : "所有自动任务已暂停。" );
                 }}
                 className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
                   paused ? "bg-critical" : "bg-wash-2"

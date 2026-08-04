@@ -42,10 +42,10 @@ def _resolve(token: str) -> dict[str, Any] | None:
 
 def current_user(authorization: str = Header(default="")) -> dict[str, Any]:
     if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="sign in required")
+        raise HTTPException(status_code=401, detail="请先登录")
     user = _resolve(authorization.removeprefix("Bearer ").strip())
     if user is None:
-        raise HTTPException(status_code=401, detail="invalid or expired session")
+        raise HTTPException(status_code=401, detail="登录状态无效或已过期，请重新登录")
     return user
 
 

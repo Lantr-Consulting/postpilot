@@ -14,14 +14,14 @@ export default function CalendarPage() {
       .map((d) => `[${d.platform.toUpperCase()}]\n${d.text}${d.hashtags.length ? `\n${d.hashtags.join(" ")}` : ""}`)
       .join("\n\n---\n\n");
     navigator.clipboard?.writeText(pack).catch(() => {});
-    toast("success", `Export pack for ${fmtDate(date)} copied. Go post it!`);
+    toast("success", `${fmtDate(date)} 的发布内容已复制，请前往对应平台发布。`);
   }
 
   return (
     <div className="flex flex-col gap-5">
       <SectionHeading
-        title="Calendar"
-        sub="Approved drafts, slotted. Copy a day's export pack and post it yourself — you're the actuator."
+        title="内容日历"
+        sub="通过审核的内容会排到这里。复制当天内容后，由你前往对应平台发布。"
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -33,21 +33,21 @@ export default function CalendarPage() {
             <Card
               key={date}
               className={isToday ? "ring-1 ring-accent/50" : ""}
-              title={`${fmtDate(date)}${isToday ? " · today" : ""}`}
+              title={`${fmtDate(date)}${isToday ? " · 今天" : ""}`}
               action={
                 drafts.length > 0 ? (
                   <button
                     onClick={() => copyPack(date)}
                     className="btn-ghost px-2.5 py-1 text-[11px]"
                   >
-                    Copy pack
+                    复制当天内容
                   </button>
                 ) : undefined
               }
             >
               {drafts.length === 0 ? (
                 <p className="text-xs text-ink-muted">
-                  {num % 2 === 0 ? "Rest day — nothing slotted." : "Open slot."}
+                  {num % 2 === 0 ? "今天不发布内容。" : "还有空余时段。"}
                 </p>
               ) : (
                 <ul className="flex flex-col gap-2.5">
@@ -69,12 +69,12 @@ export default function CalendarPage() {
         })}
       </div>
 
-      <Card title="How posting works">
+      <Card title="发布流程">
         <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm text-ink-2">
-          <li>Approve drafts in the Studio — the editorial engine re-checks the final text.</li>
-          <li>They land here on their slot day, tailored per platform.</li>
-          <li>Copy the day&apos;s pack, paste into each platform, hit post yourself.</li>
-          <li>Log the results in Performance — the Growth Lead learns from what worked.</li>
+          <li>在内容工作台中审核初稿，产品会再次检查最终文字。</li>
+          <li>通过的内容会按平台和日期排进日历。</li>
+          <li>复制当天内容，粘贴到对应平台，再由你亲自发布。</li>
+          <li>发布后记录数据，内容顾问会根据实际表现提出下一轮建议。</li>
         </ol>
       </Card>
     </div>

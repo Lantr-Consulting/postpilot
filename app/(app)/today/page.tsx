@@ -17,7 +17,7 @@ export default function TodayPage() {
   return (
     <div className="flex flex-col gap-5">
       <SectionHeading
-        title={`Good morning, ${CREATOR.name.split(" ")[0]}`}
+        title={`${CREATOR.name.split(" ")[0]}，你好`}
         sub={CREATOR.ipProfile.positioning}
       />
 
@@ -62,30 +62,30 @@ export default function TodayPage() {
       {/* Pipeline counts */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat
-          label="Materials to mine"
+          label="待整理的材料"
           value={PIPELINE_COUNTS.materialsToMine}
-          hint="in the Library"
+          hint="在材料库中"
         />
         <Stat
-          label="Ideas awaiting you"
+          label="待确认的选题"
           value={PIPELINE_COUNTS.ideasAwaiting}
-          hint="in the Studio"
+          hint="在内容工作台中"
         />
         <Stat
-          label="Drafts to review"
+          label="待审核的初稿"
           value={PIPELINE_COUNTS.draftsToApprove}
-          hint="checked by the engine"
+          hint="已完成规则检查"
         />
         <Stat
-          label="Ready to export"
+          label="可以导出的内容"
           value={PIPELINE_COUNTS.readyToExport}
-          hint="approved, on the calendar"
+          hint="已通过并排入日历"
         />
-        <Stat label="Posting streak" value={`${STREAK_DAYS}d`} hint="you post; we count" />
+        <Stat label="连续发布" value={`${STREAK_DAYS} 天`} hint="由你发布，产品负责记录" />
       </div>
 
       {/* Growth Lead insight — pinned to the desk like an index card */}
-      <Card title="From your Growth Lead">
+      <Card title="内容顾问的建议">
         <div className="index-card rounded-xl px-4 pb-4 pt-3">
           <p className="font-display text-[17px] leading-[28px] text-ink">
             {LATEST_INSIGHT}
@@ -93,20 +93,20 @@ export default function TodayPage() {
         </div>
         <div className="mt-4 flex gap-2">
           <Link href="/studio" className="btn-primary px-4 py-2 text-sm">
-            Open the Studio
+            打开内容工作台
           </Link>
           <Link href="/growth-lead" className="btn-ghost px-4 py-2 text-sm">
-            Ask about it
+            继续讨论
           </Link>
         </div>
       </Card>
 
       {/* Today's slotted drafts */}
-      <Card title="On the calendar today">
+      <Card title="今天计划发布">
         {todaysDrafts.length === 0 ? (
           <p className="text-sm text-ink-muted">
-            Nothing slotted for today. The Studio has {PIPELINE_COUNTS.ideasAwaiting}{" "}
-            ideas waiting.
+            今天还没有安排内容。内容工作台里有 {PIPELINE_COUNTS.ideasAwaiting}{" "}
+            个选题等待确认。
           </p>
         ) : (
           <ul className="flex flex-col gap-3">

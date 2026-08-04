@@ -25,8 +25,8 @@ def test_platform_length_pass_and_fail():
     ok = get(run("x" * 280), "platform_length")
     assert ok["pass"] and "280" in ok["detail"]
     over = get(run("x" * 281), "platform_length")
-    assert not over["pass"] and "over limit" in over["detail"]
-    assert over["source"] == "X docs: 280 chars"
+    assert not over["pass"] and "已经超出" in over["detail"]
+    assert over["source"] == "X 发布格式：280 字符"
 
 
 def test_length_counts_hashtags():

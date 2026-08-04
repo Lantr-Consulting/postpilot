@@ -11,16 +11,16 @@ import re
 
 # Character limits from the platforms' own documentation.
 PLATFORM_LIMITS: dict[str, tuple[int, str]] = {
-    "x": (280, "X docs: 280 chars"),
-    "bluesky": (300, "Bluesky docs: 300 chars"),
-    "instagram": (2200, "Instagram docs: 2,200 chars"),
-    "linkedin": (3000, "LinkedIn docs: 3,000 chars"),
-    "youtube": (5000, "YouTube docs: 5,000-char description"),
+    "x": (280, "X 发布格式：280 字符"),
+    "bluesky": (300, "Bluesky 发布格式：300 字符"),
+    "instagram": (2200, "Instagram 发布格式：2,200 字符"),
+    "linkedin": (3000, "LinkedIn 发布格式：3,000 字符"),
+    "youtube": (5000, "YouTube 视频说明：5,000 字符"),
 }
 
-FTC_SOURCE = "16 CFR 255 (FTC Endorsement Guides)"
-USER_RULES = "Your editorial rules"
-GROUNDING = "PostPilot grounding rule"
+FTC_SOURCE = "美国联邦贸易委员会（FTC）广告背书指南 · 16 CFR 255"
+USER_RULES = "你的内容检查规则"
+GROUNDING = "PostPilot 材料引用规则"
 
 # Anything in these unicode blocks counts as an emoji for the cap.
 _EMOJI_RE = re.compile(
@@ -52,7 +52,7 @@ def check_draft(
     checks.append(
         {
             "rule": "platform_length",
-            "detail": f"{n:,} of {limit:,} characters" + ("" if n <= limit else " — over limit"),
+            "detail": f"已使用 {n:,} 个字符，上限 {limit:,}" + ("" if n <= limit else "，已经超出"),
             "source": source,
             "pass": n <= limit,
         }
@@ -66,9 +66,9 @@ def check_draft(
             {
                 "rule": "ftc_disclosure",
                 "detail": (
-                    f"Sponsored draft carries “{disclosure}”"
+                    f"推广内容已经包含“{disclosure}”说明"
                     if present
-                    else f"Sponsored draft is missing the required “{disclosure}” disclosure"
+                    else f"推广内容缺少规定的“{disclosure}”说明"
                 ),
                 "source": FTC_SOURCE,
                 "pass": present,
@@ -81,7 +81,7 @@ def check_draft(
     checks.append(
         {
             "rule": "banned_phrases",
-            "detail": "No banned phrases found" if not found else "Banned phrase: " + ", ".join(f"“{p}”" for p in found),
+            "detail": "没有发现禁用表达" if not found else "发现禁用表达：" + "、".join(f"“{p}”" for p in found),
             "source": USER_RULES,
             "pass": not found,
         }
@@ -95,7 +95,7 @@ def check_draft(
         checks.append(
             {
                 "rule": "hashtag_cap",
-                "detail": f"{n_tags} of {max_tags} allowed",
+                "detail": f"使用了 {n_tags} 个话题标签，上限为 {max_tags} 个",
                 "source": USER_RULES,
                 "pass": n_tags <= max_tags,
             }
@@ -108,7 +108,7 @@ def check_draft(
         checks.append(
             {
                 "rule": "emoji_cap",
-                "detail": f"{n_emoji} of {max_emoji} allowed",
+                "detail": f"使用了 {n_emoji} 个表情符号，上限为 {max_emoji} 个",
                 "source": USER_RULES,
                 "pass": n_emoji <= max_emoji,
             }
@@ -122,10 +122,10 @@ def check_draft(
         {
             "rule": "duplicate_distance",
             "detail": (
-                f"{int(worst * 100)}% similar to your closest shipped post"
-                + ("" if worst < DUPLICATE_THRESHOLD else " — too close")
+                f"与最相近的已发布内容有 {int(worst * 100)}% 相似"
+                + ("" if worst < DUPLICATE_THRESHOLD else "，相似度过高")
             ),
-            "source": "PostPilot duplicate check (difflib)",
+            "source": "PostPilot 重复内容检查",
             "pass": worst < DUPLICATE_THRESHOLD,
         }
     )
@@ -138,9 +138,9 @@ def check_draft(
             {
                 "rule": "atom_citation",
                 "detail": (
-                    "Grounded in your Library: " + " · ".join(titles)
+                    "使用材料库内容：" + " · ".join(titles)
                     if not missing
-                    else "Cites Library atoms that don't exist: " + ", ".join(missing)
+                    else "引用了不存在的材料：" + "、".join(missing)
                 ),
                 "source": GROUNDING,
                 "pass": not missing,
@@ -150,7 +150,7 @@ def check_draft(
         checks.append(
             {
                 "rule": "atom_citation",
-                "detail": "No personal-story claims cited from the Library",
+                "detail": "没有使用需要从材料库引用的个人经历",
                 "source": GROUNDING,
                 "pass": True,
             }

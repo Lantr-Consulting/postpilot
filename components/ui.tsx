@@ -14,10 +14,9 @@ export function DisclaimerBanner() {
       <span aria-hidden className="inline-block size-2 rounded-full bg-accent" />
       <span>
         <strong className="font-semibold text-ink">
-          AI-generated drafts — you review everything before it&apos;s posted.
+          AI 只负责准备初稿，发布前的每一项内容都由你审核。
         </strong>{" "}
-        Performance data is self-reported. PostPilot never publishes on your
-        behalf.
+        内容表现由用户自行记录，PostPilot 不会代替你发布。
       </span>
     </div>
   );
@@ -73,10 +72,10 @@ export function Stat({
 }
 
 const IDEA_STYLES: Record<IdeaStatus, { label: string; cls: string }> = {
-  proposed: { label: "Awaiting your call", cls: "bg-accent/15 text-accent" },
-  accepted: { label: "Accepted", cls: "bg-good/10 text-good" },
-  declined: { label: "Declined", cls: "bg-wash-2 text-ink-2" },
-  superseded: { label: "Superseded", cls: "bg-wash-2 text-ink-muted" },
+  proposed: { label: "等待确认", cls: "bg-accent/15 text-accent" },
+  accepted: { label: "已采用", cls: "bg-good/10 text-good" },
+  declined: { label: "未采用", cls: "bg-wash-2 text-ink-2" },
+  superseded: { label: "已有新版本", cls: "bg-wash-2 text-ink-muted" },
 };
 
 export function IdeaBadge({ status }: { status: IdeaStatus }) {
@@ -91,11 +90,11 @@ export function IdeaBadge({ status }: { status: IdeaStatus }) {
 }
 
 const DRAFT_STYLES: Record<DraftStatus, { label: string; cls: string }> = {
-  draft: { label: "Needs review", cls: "bg-accent/15 text-accent" },
-  approved: { label: "Approved", cls: "bg-good/10 text-good" },
-  exported: { label: "Exported", cls: "bg-atom-stat/15 text-atom-stat" },
-  posted: { label: "Posted", cls: "bg-wash-2 text-ink-2" },
-  declined: { label: "Declined", cls: "bg-wash-2 text-ink-muted" },
+  draft: { label: "等待审核", cls: "bg-accent/15 text-accent" },
+  approved: { label: "已通过", cls: "bg-good/10 text-good" },
+  exported: { label: "已导出", cls: "bg-atom-stat/15 text-atom-stat" },
+  posted: { label: "已发布", cls: "bg-wash-2 text-ink-2" },
+  declined: { label: "未采用", cls: "bg-wash-2 text-ink-muted" },
 };
 
 export function DraftBadge({ status }: { status: DraftStatus }) {
@@ -135,12 +134,20 @@ const ATOM_STYLES: Record<AtomKind, string> = {
   stat: "bg-atom-stat/15 text-atom-stat",
 };
 
+const ATOM_LABEL: Record<AtomKind, string> = {
+  story: "经历",
+  take: "观点",
+  lesson: "经验",
+  quote: "原话",
+  stat: "数据",
+};
+
 export function AtomBadge({ kind }: { kind: AtomKind }) {
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${ATOM_STYLES[kind]}`}
     >
-      {kind}
+      {ATOM_LABEL[kind]}
     </span>
   );
 }
@@ -163,7 +170,7 @@ export function CheckList({ checks }: { checks: RuleCheck[] }) {
           <span>
             <span className="text-ink-2">{c.detail}</span>
             <span className="ml-1.5 text-xs text-ink-muted">({c.source})</span>
-            <span className="sr-only">{c.pass ? " (clear)" : " (flagged)"}</span>
+            <span className="sr-only">{c.pass ? "（通过）" : "（需要处理）"}</span>
           </span>
         </li>
       ))}

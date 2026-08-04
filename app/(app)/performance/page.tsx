@@ -10,6 +10,13 @@ import { useToast } from "@/components/toast";
 import { Card, PlatformChip, SectionHeading, Stat } from "@/components/ui";
 
 const METRIC_KEYS = ["views", "likes", "comments", "saves", "follows"] as const;
+const METRIC_LABEL: Record<(typeof METRIC_KEYS)[number], string> = {
+  views: "浏览",
+  likes: "点赞",
+  comments: "评论",
+  saves: "收藏",
+  follows: "新增关注",
+};
 
 export default function PerformancePage() {
   const toast = useToast();
@@ -59,9 +66,9 @@ export default function PerformancePage() {
       setDraftId("");
       setMetrics({ views: 0, likes: 0, comments: 0, saves: 0, follows: 0 });
       setNotes("");
-      toast("success", "Logged — the Growth Lead learns from this in the next review.");
+      toast("success", "发布结果已记录，下一次内容回顾会参考这些数据。" );
     } catch (e) {
-      toast("error", e instanceof Error ? e.message : "Logging failed.");
+      toast("error", e instanceof Error ? e.message : "保存失败。" );
     }
     setSaving(false);
   }
@@ -79,18 +86,18 @@ export default function PerformancePage() {
   return (
     <div className="flex flex-col gap-5">
       <SectionHeading
-        title="Performance"
-        sub="Self-reported, and that's fine — the loop closes because you log it."
+        title="内容表现"
+        sub="发布结果由你自行记录。产品只根据你保存的数据提出建议，不会声称已经连接平台账户。"
       />
 
       <div className="grid grid-cols-3 gap-3">
-        <Stat label={`Views (last ${results.length} posts)`} value={fmtNum(totals.views)} />
-        <Stat label="Saves" value={fmtNum(totals.saves)} hint="future subscribers" />
-        <Stat label="New follows" value={fmtNum(totals.follows)} />
+        <Stat label={`最近 ${results.length} 篇内容的浏览量`} value={fmtNum(totals.views)} />
+        <Stat label="收藏" value={fmtNum(totals.saves)} hint="可以反映内容的长期价值" />
+        <Stat label="新增关注" value={fmtNum(totals.follows)} />
       </div>
 
       {results.length > 0 && (
-        <Card title="Views by post">
+        <Card title="各篇内容浏览量">
           <ul className="flex flex-col gap-2.5">
             {results.map((r) => (
               <li key={r.id} className="flex items-center gap-3">
@@ -117,30 +124,30 @@ export default function PerformancePage() {
       )}
 
       <Card
-        title="Logged results"
+        title="已记录的发布结果"
         action={
           <button
             onClick={() => {
               if (!live) {
-                toast("info", "Sign in to log your own results. (Sample data)");
+                toast("info", "登录后可以记录自己的发布结果。（演示数据）" );
                 return;
               }
               if (loggable.length === 0) {
-                toast("info", "Nothing to log yet — export a draft and post it first.");
+                toast("info", "还没有可以记录的内容，请先导出并发布一篇初稿。" );
                 return;
               }
               setLogging((v) => !v);
             }}
             className="btn-primary px-3.5 py-1.5 text-xs"
           >
-            {logging ? "Close" : "Log a result"}
+            {logging ? "关闭" : "记录发布结果"}
           </button>
         }
       >
         {logging && (
           <div className="mb-4 rounded-xl border border-hairline p-4">
             <label className="text-xs font-medium text-ink-2" htmlFor="log-draft">
-              Which post?
+              你发布了哪一篇内容？
             </label>
             <select
               id="log-draft"
@@ -148,7 +155,7 @@ export default function PerformancePage() {
               onChange={(e) => setDraftId(e.target.value)}
               className="mt-1.5 w-full rounded-lg border border-hairline bg-page px-3 py-2 text-sm text-ink"
             >
-              <option value="">Pick an exported draft…</option>
+              <option value="">请选择已导出的初稿…</option>
               {loggable.map((d) => (
                 <option key={d.id} value={d.id}>
                   [{d.platform}] {(d.ideaTitle || d.text).slice(0, 60)}
@@ -158,7 +165,7 @@ export default function PerformancePage() {
             <div className="mt-3 grid grid-cols-5 gap-2">
               {METRIC_KEYS.map((k) => (
                 <label key={k} className="text-[11px] text-ink-muted">
-                  {k}
+                  {METRIC_LABEL[k]}
                   <input
                     type="number"
                     min={0}
@@ -175,7 +182,7 @@ export default function PerformancePage() {
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notes — what do you think made it work (or not)?"
+              placeholder="补充说明：你认为这篇内容为什么有效或无效？"
               className="mt-3 w-full rounded-lg border border-hairline bg-page px-3 py-2 text-sm text-ink placeholder:text-ink-muted"
             />
             <button
@@ -183,28 +190,27 @@ export default function PerformancePage() {
               disabled={!draftId || saving}
               className="btn-primary mt-3 px-3.5 py-1.5 text-xs"
             >
-              {saving ? "Saving…" : "Save result"}
+              {saving ? "正在保存…" : "保存结果"}
             </button>
           </div>
         )}
 
         {results.length === 0 ? (
           <p className="text-sm text-ink-muted">
-            No results yet. Export a draft, post it yourself, then log how it
-            did — that&apos;s the loop.
+            还没有发布结果。导出并亲自发布内容后，可以回来记录它的实际表现。
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="border-b border-hairline text-xs text-ink-muted">
-                  <th className="pb-2 pr-3 font-medium">Post</th>
-                  <th className="pb-2 pr-3 font-medium">Platform</th>
-                  <th className="pb-2 pr-3 font-medium">Date</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Views</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Likes</th>
-                  <th className="pb-2 pr-3 text-right font-medium">Saves</th>
-                  <th className="pb-2 text-right font-medium">Follows</th>
+                  <th className="pb-2 pr-3 font-medium">内容</th>
+                  <th className="pb-2 pr-3 font-medium">平台</th>
+                  <th className="pb-2 pr-3 font-medium">日期</th>
+                  <th className="pb-2 pr-3 text-right font-medium">浏览</th>
+                  <th className="pb-2 pr-3 text-right font-medium">点赞</th>
+                  <th className="pb-2 pr-3 text-right font-medium">收藏</th>
+                  <th className="pb-2 text-right font-medium">新增关注</th>
                 </tr>
               </thead>
               <tbody>
@@ -236,26 +242,25 @@ export default function PerformancePage() {
         )}
       </Card>
 
-      <Card title="What the Growth Lead sees">
+      <Card title="内容顾问会看到什么">
         {live && reviews.length > 0 ? (
           <>
             <p className="text-sm leading-relaxed text-ink-2">{reviews[0].summary}</p>
             <p className="mt-3 text-xs text-ink-muted">
-              From your latest growth review ({fmtDate(reviews[0].at)}) —
-              accepted moves become standing lessons.
+              来自最近一次内容回顾（{fmtDate(reviews[0].at)}）。你确认采用的建议会成为之后写作时的长期要求。
             </p>
           </>
         ) : (
           <>
             <ul className="flex flex-col gap-1.5 text-sm text-ink-2">
-              <li>· Number-led hooks outperform question hooks ~5x on views.</li>
-              <li>· The burnout narrative drives the most comments and follows per view.</li>
-              <li>· Client stories are your best follows-per-view — and under-used.</li>
+              <li>· 以具体数字开头的内容，浏览量大约是提问式开头的 5 倍。</li>
+              <li>· 关于职业倦怠的亲身经历带来了最多评论，也更容易获得关注。</li>
+              <li>· 客户故事的关注转化最好，但目前发布得太少。</li>
             </ul>
             <p className="mt-3 text-xs text-ink-muted">
               {live
-                ? "Run a growth review to get your own reading."
-                : "Insights become standing lessons in the next generation run."}
+                ? "开始一次内容回顾，查看属于你自己的建议。"
+                : "你确认采用的建议会成为之后写作时的长期要求。"}
             </p>
           </>
         )}

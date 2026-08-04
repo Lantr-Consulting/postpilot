@@ -103,7 +103,8 @@ _RESEARCH_PROMPT = ChatPromptTemplate.from_messages(
             "Use the tools to scan their niche (2-4 tool calls), then check "
             "their Library for personal material that pairs with what you "
             "found. Finish with a short summary of the strongest signals and "
-            "which atoms pair with them. Only cite data the tools returned.",
+            "which atoms pair with them. Only cite data the tools returned. "
+            "Write every user-facing summary in natural Simplified Chinese.",
         ),
         ("user", "{task}"),
         ("placeholder", "{agent_scratchpad}"),
@@ -122,6 +123,7 @@ research. When an idea draws on the creator's own material, cite the atomId
 from the Library — and NEVER cite an atomId the research didn't surface.
 Ideas must fit the creator's pillars and voice. No reaction/dunk content
 unless their profile asks for it."""
+_IDEAS_SYSTEM += "\nWrite every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
 def _standing_lessons(user_id: str, profile: dict) -> str:
@@ -247,6 +249,7 @@ compressed), "url": null, "atomId": str}]}]}
 Rules: 2-3 ideas, each built on a DIFFERENT atom from the provided list —
 cite it by atomId. Every idea must be fully grounded in the material;
 nothing invented. Ideas must fit the creator's pillars and voice."""
+_REPURPOSE_SYSTEM += "\nWrite every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
 def repurpose_material(user_id: str, material: dict, profile: dict) -> list[dict]:
@@ -317,6 +320,7 @@ one-line standing instruction for future content generation)}]}
 Rules: 2-3 moves max, each one traceable to the data given. Never invent
 metrics. If the data is thin, say so in the summary and propose moves that
 would produce better data."""
+_REVIEW_SYSTEM += "\nWrite every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
 def growth_review(user_id: str, profile: dict, stats: dict) -> dict | None:
@@ -361,6 +365,7 @@ Rules: 4-8 atoms. Every atom must be genuinely IN the material — quote or
 faithfully compress it; never embellish or invent. Prefer specific,
 personal, reusable moments (numbers, named stories, strong takes) over
 generic advice."""
+_MINE_SYSTEM += "\nWrite every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
 def mine_material(material: dict, profile: dict) -> list[dict]:
@@ -410,6 +415,7 @@ are law). Personal stories, numbers, and anecdotes may ONLY come from the
 provided atoms — cite every atom you used in atomIds; if no atom fits,
 write without personal claims. Hashtags only where the platform culture
 expects them, within the creator's cap. Do not mark anything sponsored."""
+_DRAFT_SYSTEM += "\nWrite every draft and every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
 def draft_variants(user_id: str, idea: dict, profile: dict, rules: dict, platforms: list[str]) -> list[dict]:
