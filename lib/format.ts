@@ -1,8 +1,8 @@
 // Small formatting helpers shared across screens.
 
-import type { Language } from "./language";
+import { getLanguage, type Language } from "./language";
 
-export function fmtDate(iso: string, language: Language = "zh"): string {
+export function fmtDate(iso: string, language: Language = getLanguage()): string {
   const d = new Date(`${iso}T12:00:00`);
   return d.toLocaleDateString(language === "zh" ? "zh-CN" : "en-US", {
     weekday: "short",
@@ -11,7 +11,7 @@ export function fmtDate(iso: string, language: Language = "zh"): string {
   });
 }
 
-export function fmtDayShort(iso: string, language: Language = "zh"): { day: string; num: number } {
+export function fmtDayShort(iso: string, language: Language = getLanguage()): { day: string; num: number } {
   const d = new Date(`${iso}T12:00:00`);
   return {
     day: d.toLocaleDateString(language === "zh" ? "zh-CN" : "en-US", { weekday: "narrow" }),
@@ -19,7 +19,7 @@ export function fmtDayShort(iso: string, language: Language = "zh"): { day: stri
   };
 }
 
-export function fmtNum(n: number, language: Language = "zh"): string {
+export function fmtNum(n: number, language: Language = getLanguage()): string {
   if (language === "en") {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 100_000 ? 0 : 1)}K`;
@@ -30,7 +30,7 @@ export function fmtNum(n: number, language: Language = "zh"): string {
   return n.toLocaleString("zh-CN");
 }
 
-export function fmtTime(iso: string, language: Language = "zh"): string {
+export function fmtTime(iso: string, language: Language = getLanguage()): string {
   return new Date(iso).toLocaleTimeString(language === "zh" ? "zh-CN" : "en-US", {
     hour: "numeric",
     minute: "2-digit",
