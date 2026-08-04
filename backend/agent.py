@@ -35,6 +35,12 @@ def _tool_result(items: list[dict]) -> str:
     return json.dumps(items[:6])
 
 
+def _language_rule(language: str) -> str:
+    if language == "en":
+        return "Write every user-facing string in natural English; keep JSON keys unchanged."
+    return "Write every user-facing string in natural Simplified Chinese; keep JSON keys unchanged."
+
+
 @tool
 def search_niche_social(query: str) -> str:
     """Search Bluesky for top recent posts about a topic in the creator's niche."""
@@ -104,7 +110,7 @@ _RESEARCH_PROMPT = ChatPromptTemplate.from_messages(
             "their Library for personal material that pairs with what you "
             "found. Finish with a short summary of the strongest signals and "
             "which atoms pair with them. Only cite data the tools returned. "
-            "Write every user-facing summary in natural Simplified Chinese.",
+            "{language_rule}",
         ),
         ("user", "{task}"),
         ("placeholder", "{agent_scratchpad}"),
@@ -123,7 +129,6 @@ research. When an idea draws on the creator's own material, cite the atomId
 from the Library — and NEVER cite an atomId the research didn't surface.
 Ideas must fit the creator's pillars and voice. No reaction/dunk content
 unless their profile asks for it."""
-_IDEAS_SYSTEM += "\nWrite every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
 def _standing_lessons(user_id: str, profile: dict) -> str:
@@ -139,6 +144,7 @@ def run_research(
     mission: str | None = None,
     on_progress=None,
     get_steer=None,
+    language: str = "zh",
 ) -> list[dict]:
     """Research run: agent scans the niche with tools, then a JSON pass
     shapes ideas. Steering notes that arrive during the tool phase are read
@@ -165,6 +171,7 @@ def run_research(
             "profile": json.dumps(profile)[:3000],
             "lessons": _standing_lessons(user_id, profile),
             "task": task,
+            "language_rule": _language_rule(language),
         }
     )
     progress("Shaping ideas from what the tools found…")
@@ -180,7 +187,7 @@ def run_research(
     shape = _llm.bind(response_format={"type": "json_object"})
     ideas_raw = shape.invoke(
         [
-            {"role": "system", "content": _IDEAS_SYSTEM},
+            {"role": "system", "content": _IDEAS_SYSTEM + "\n" + _language_rule(language)},
             {
                 "role": "user",
                 "content": "Creator profile:\n"
@@ -249,10 +256,9 @@ compressed), "url": null, "atomId": str}]}]}
 Rules: 2-3 ideas, each built on a DIFFERENT atom from the provided list —
 cite it by atomId. Every idea must be fully grounded in the material;
 nothing invented. Ideas must fit the creator's pillars and voice."""
-_REPURPOSE_SYSTEM += "\nWrite every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
-def repurpose_material(user_id: str, material: dict, profile: dict) -> list[dict]:
+def repurpose_material(user_id: str, material: dict, profile: dict, language: str = "zh") -> list[dict]:
     """One mined material -> a short series of Studio ideas, every one
     citing its atom. The material must already be mined."""
     atoms = [
@@ -265,7 +271,7 @@ def repurpose_material(user_id: str, material: dict, profile: dict) -> list[dict
     shape = _llm.bind(response_format={"type": "json_object"})
     raw = shape.invoke(
         [
-            {"role": "system", "content": _REPURPOSE_SYSTEM},
+            {"role": "system", "content": _REPURPOSE_SYSTEM + "\n" + _language_rule(language)},
             {
                 "role": "user",
                 "content": "Creator profile:\n" + json.dumps(profile)[:2500]
@@ -320,14 +326,13 @@ one-line standing instruction for future content generation)}]}
 Rules: 2-3 moves max, each one traceable to the data given. Never invent
 metrics. If the data is thin, say so in the summary and propose moves that
 would produce better data."""
-_REVIEW_SYSTEM += "\nWrite every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
-def growth_review(user_id: str, profile: dict, stats: dict) -> dict | None:
+def growth_review(user_id: str, profile: dict, stats: dict, language: str = "zh") -> dict | None:
     shape = _llm.bind(response_format={"type": "json_object"})
     raw = shape.invoke(
         [
-            {"role": "system", "content": _REVIEW_SYSTEM},
+            {"role": "system", "content": _REVIEW_SYSTEM + "\n" + _language_rule(language)},
             {
                 "role": "user",
                 "content": "Brand book:\n" + json.dumps(profile)[:3000]
@@ -365,15 +370,14 @@ Rules: 4-8 atoms. Every atom must be genuinely IN the material — quote or
 faithfully compress it; never embellish or invent. Prefer specific,
 personal, reusable moments (numbers, named stories, strong takes) over
 generic advice."""
-_MINE_SYSTEM += "\nWrite every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
-def mine_material(material: dict, profile: dict) -> list[dict]:
+def mine_material(material: dict, profile: dict, language: str = "zh") -> list[dict]:
     """Ingestion run: one material in, tagged atoms out (not yet stored)."""
     shape = _llm.bind(response_format={"type": "json_object"})
     raw = shape.invoke(
         [
-            {"role": "system", "content": _MINE_SYSTEM},
+            {"role": "system", "content": _MINE_SYSTEM + "\n" + _language_rule(language)},
             {
                 "role": "user",
                 "content": "Creator pillars: "
@@ -415,10 +419,16 @@ are law). Personal stories, numbers, and anecdotes may ONLY come from the
 provided atoms — cite every atom you used in atomIds; if no atom fits,
 write without personal claims. Hashtags only where the platform culture
 expects them, within the creator's cap. Do not mark anything sponsored."""
-_DRAFT_SYSTEM += "\nWrite every draft and every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged."
 
 
-def draft_variants(user_id: str, idea: dict, profile: dict, rules: dict, platforms: list[str]) -> list[dict]:
+def draft_variants(
+    user_id: str,
+    idea: dict,
+    profile: dict,
+    rules: dict,
+    platforms: list[str],
+    language: str = "zh",
+) -> list[dict]:
     """Generation: idea -> per-platform drafts, each checked by the engine.
     One refinement pass: failing drafts go back with their check rows."""
     everything = [db.atom_out(a) for a in db.list_atoms(user_id)]
@@ -441,7 +451,10 @@ def draft_variants(user_id: str, idea: dict, profile: dict, rules: dict, platfor
         )
         if feedback:
             content += "\n\nYour previous attempt failed these editorial checks — fix them:\n" + feedback
-        raw = shape.invoke([{"role": "system", "content": _DRAFT_SYSTEM}, {"role": "user", "content": content}])
+        raw = shape.invoke([
+            {"role": "system", "content": _DRAFT_SYSTEM + "\n" + _language_rule(language)},
+            {"role": "user", "content": content},
+        ])
         try:
             return json.loads(raw.content).get("drafts") or []
         except (json.JSONDecodeError, TypeError):

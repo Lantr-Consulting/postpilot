@@ -17,6 +17,7 @@ import type { ChatMessage } from "@/lib/types";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { useToast } from "@/components/toast";
 import { Card, SectionHeading } from "@/components/ui";
+import { pick, useLanguage } from "@/lib/language";
 
 interface ThreadStub {
   id: string;
@@ -26,6 +27,7 @@ interface ThreadStub {
 
 export default function GrowthLeadPage() {
   const toast = useToast();
+  const language = useLanguage();
   const { me, refresh: refreshMe } = useMe();
   const signedIn = me !== null;
 
@@ -45,21 +47,21 @@ export default function GrowthLeadPage() {
 
   async function startReview() {
     if (!signedIn) {
-      toast("info", "登录后可以回顾自己的内容表现；当前显示的是演示数据。" );
+      toast("info", pick(language, "登录后可以回顾自己的内容表现；当前显示的是演示数据。", "Sign in to review your own performance. This is demo data."));
       return;
     }
     setReviewing(true);
     try {
       const run = await runReview();
-      const done = await pollRun(run.id, (r) => setReviewProgress(r.progress || "正在回顾…"));
+      const done = await pollRun(run.id, (r) => setReviewProgress(r.progress || pick(language, "正在回顾…", "Reviewing…")));
       if (done.status === "done") {
         setLiveReviews(await getReviews());
-        toast("success", "回顾完成，请在下方确认是否采用这些建议。" );
+        toast("success", pick(language, "回顾完成，请在下方确认是否采用这些建议。", "Review complete. Decide which recommendations to keep below."));
       } else {
-        toast("error", done.report ?? "回顾没有完成，请重试。" );
+        toast("error", done.report ?? pick(language, "回顾没有完成，请重试。", "The review did not finish. Please try again."));
       }
     } catch (e) {
-      toast("error", e instanceof Error ? e.message : "回顾没有完成，请重试。" );
+      toast("error", e instanceof Error ? e.message : pick(language, "回顾没有完成，请重试。", "The review did not finish. Please try again."));
     }
     setReviewing(false);
     setReviewProgress("");
@@ -71,12 +73,12 @@ export default function GrowthLeadPage() {
       setLiveReviews((rs) => (rs ?? []).map((r) => (r.id === updated.id ? updated : r)));
       if (accept) {
         await refreshMe(); // the lesson amended the brand book (new version)
-        toast("success", "建议已采用，并写入内容档案作为长期要求。" );
+        toast("success", pick(language, "建议已采用，并写入内容档案作为长期要求。", "Recommendation accepted and added to the content profile as a standing instruction."));
       } else {
-        toast("info", "已标记为不采用。" );
+        toast("info", pick(language, "已标记为不采用。", "Recommendation declined."));
       }
     } catch (e) {
-      toast("error", e instanceof Error ? e.message : "无法保存这个选择。" );
+      toast("error", e instanceof Error ? e.message : pick(language, "无法保存这个选择。", "Unable to save that choice."));
     }
   }
 
@@ -122,7 +124,7 @@ export default function GrowthLeadPage() {
 
   function newThread() {
     if (!signedIn) {
-      toast("info", "登录后可以保存对话；当前显示的是演示数据。" );
+      toast("info", pick(language, "登录后可以保存对话；当前显示的是演示数据。", "Sign in to save conversations. This is demo data."));
       return;
     }
     setThreadId(null);
@@ -155,8 +157,7 @@ export default function GrowthLeadPage() {
       }
     } catch {
       // Offline → the M1 sample experience stands.
-      reply =
-        "服务暂时不可用，因此这里显示演示回复。服务恢复后，我会根据你的内容档案和真实材料回答，不会编造你的经历。";
+      reply = pick(language, "服务暂时不可用，因此这里显示演示回复。服务恢复后，我会根据你的内容档案和真实材料回答，不会编造你的经历。", "The service is temporarily unavailable, so this is a demo reply. When it returns, I will answer from your content profile and real source material without inventing your story.");
     }
     setThinking(false);
     const at = new Date().toISOString();
@@ -168,16 +169,16 @@ export default function GrowthLeadPage() {
     toast(
       status === "accepted" ? "success" : "info",
       status === "accepted"
-        ? "建议已采用，内容档案会生成一个新版本。"
-        : "已标记为不采用，下次回顾会参考。"
+        ? pick(language, "建议已采用，内容档案会生成一个新版本。", "Recommendation accepted. The content profile will receive a new version.")
+        : pick(language, "已标记为不采用，下次回顾会参考。", "Declined. The next review will take that into account.")
     );
   }
 
   return (
     <div className="flex flex-col gap-5">
       <SectionHeading
-        title="内容顾问"
-        sub="围绕你的内容档案、材料库和实际发布结果讨论选题，并定期回顾哪些内容有效。"
+        title={pick(language, "内容顾问", "Content advisor")}
+        sub={pick(language, "围绕你的内容档案、材料库和实际发布结果讨论选题，并定期回顾哪些内容有效。", "Discuss ideas using your content profile, source library, and actual results, then review what is working over time.")}
       />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
@@ -185,10 +186,10 @@ export default function GrowthLeadPage() {
         <Card className="flex min-h-[420px] flex-col">
           <div className="mb-3 flex items-center justify-between gap-2 border-b border-hairline pb-3">
             <span className="text-sm font-semibold">
-              {thread?.title ?? "新对话"}
+              {thread?.title ?? pick(language, "新对话", "New conversation")}
             </span>
             <button onClick={newThread} className="btn-ghost px-3 py-1 text-xs">
-              新建对话
+              {pick(language, "新建对话", "New conversation")}
             </button>
           </div>
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
@@ -203,13 +204,13 @@ export default function GrowthLeadPage() {
               >
                 <p className="whitespace-pre-line">{m.text}</p>
                 <p className="mt-1 text-right text-[10px] text-ink-muted">
-                  {fmtTime(m.at)}
+                  {fmtTime(m.at, language)}
                 </p>
               </div>
             ))}
             {thinking && (
               <div className="max-w-[85%] animate-[msg-in_.15s_ease-out] self-start rounded-2xl bg-surface-2 px-4 py-2.5 text-sm text-ink-muted">
-                正在整理…
+                {pick(language, "正在整理…", "Thinking…")}
               </div>
             )}
           </div>
@@ -218,21 +219,21 @@ export default function GrowthLeadPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="例如：帮我安排这周的内容"
+              placeholder={pick(language, "例如：帮我安排这周的内容", "Example: Help me plan this week's content")}
               className="flex-1 rounded-full border border-hairline bg-page px-4 py-2 text-sm text-ink placeholder:text-ink-muted"
             />
             <button onClick={send} className="btn-primary px-4 py-2 text-sm">
-              发送
+              {pick(language, "发送", "Send")}
             </button>
           </div>
         </Card>
 
         {/* Right rail */}
         <div className="flex flex-col gap-5">
-          <Card title="内容目标">
+          <Card title={pick(language, "内容目标", "Content goals")}>
             {signedIn && me.ipProfile.goals.length === 0 && (
               <p className="text-xs text-ink-muted">
-                还没有内容目标。可以在内容档案中补充，之后的回顾会根据这些目标提出建议。
+                {pick(language, "还没有内容目标。可以在内容档案中补充，之后的回顾会根据这些目标提出建议。", "No content goals yet. Add them to your content profile so future reviews can work toward them.")}
               </p>
             )}
             <ul className="flex flex-col gap-2.5">
@@ -246,32 +247,32 @@ export default function GrowthLeadPage() {
           </Card>
 
           <Card
-            title="最近一次内容回顾"
+            title={pick(language, "最近一次内容回顾", "Latest content review")}
             action={
               <button
                 onClick={startReview}
                 disabled={reviewing}
                 className="btn-primary px-3 py-1 text-[11px]"
               >
-                {reviewing ? "正在回顾…" : "开始回顾"}
+                {reviewing ? pick(language, "正在回顾…", "Reviewing…") : pick(language, "开始回顾", "Start review")}
               </button>
             }
           >
             {reviewing && (
               <p className="mb-3 flex items-center gap-2 text-xs text-ink-2">
                 <span aria-hidden className="inline-block size-2 animate-pulse rounded-full bg-accent" />
-                {reviewProgress || "正在回顾…"}
+                {reviewProgress || pick(language, "正在回顾…", "Reviewing…")}
               </p>
             )}
             {signedIn && liveReviews !== null ? (
               liveReviews.length === 0 ? (
                 <p className="text-xs text-ink-muted">
-                  还没有完成过内容回顾。开始后，产品会查看内容目标、各方向的发布情况和已记录的数据，再提出可以由你确认的调整建议。
+                  {pick(language, "还没有完成过内容回顾。开始后，产品会查看内容目标、各方向的发布情况和已记录的数据，再提出可以由你确认的调整建议。", "No content review yet. Start one to compare goals, publishing mix, and logged results, then decide which recommendations to keep.")}
                 </p>
               ) : (
                 <>
                   <p className="mb-2 text-[11px] text-ink-muted">
-                    {fmtDate(liveReviews[0].at)}
+                    {fmtDate(liveReviews[0].at, language)}
                   </p>
                   <p className="text-xs leading-relaxed text-ink-2">
                     {liveReviews[0].summary}
@@ -289,13 +290,13 @@ export default function GrowthLeadPage() {
                               onClick={() => decideLiveMove(liveReviews[0], i, true)}
                               className="btn-primary px-3 py-1 text-[11px]"
                             >
-                              采用
+                              {pick(language, "采用", "Accept")}
                             </button>
                             <button
                               onClick={() => decideLiveMove(liveReviews[0], i, false)}
                               className="btn-ghost px-3 py-1 text-[11px]"
                             >
-                              不采用
+                              {pick(language, "不采用", "Decline")}
                             </button>
                           </div>
                         ) : (
@@ -305,8 +306,8 @@ export default function GrowthLeadPage() {
                             }`}
                           >
                             {m.status === "accepted"
-                              ? "已采用，内容档案已经更新"
-                              : "未采用"}
+                              ? pick(language, "已采用，内容档案已经更新", "Accepted · content profile updated")
+                              : pick(language, "未采用", "Declined")}
                           </p>
                         )}
                       </li>
@@ -316,7 +317,7 @@ export default function GrowthLeadPage() {
               )
             ) : (
               <>
-                <p className="mb-2 text-[11px] text-ink-muted">{fmtDate(REVIEW.at)}</p>
+                <p className="mb-2 text-[11px] text-ink-muted">{fmtDate(REVIEW.at, language)}</p>
                 <p className="text-xs leading-relaxed text-ink-2">{REVIEW.summary}</p>
                 <ul className="mt-3 flex flex-col gap-2">
                   {moves.map((m) => (
@@ -331,13 +332,13 @@ export default function GrowthLeadPage() {
                             onClick={() => decideMockMove(m.id!, "accepted")}
                             className="btn-primary px-3 py-1 text-[11px]"
                           >
-                            采用
+                            {pick(language, "采用", "Accept")}
                           </button>
                           <button
                             onClick={() => decideMockMove(m.id!, "declined")}
                             className="btn-ghost px-3 py-1 text-[11px]"
                           >
-                            不采用
+                            {pick(language, "不采用", "Decline")}
                           </button>
                         </div>
                       ) : (
@@ -347,8 +348,8 @@ export default function GrowthLeadPage() {
                           }`}
                         >
                           {m.status === "accepted"
-                            ? "已采用，内容档案已经更新"
-                            : "未采用"}
+                            ? pick(language, "已采用，内容档案已经更新", "Accepted · content profile updated")
+                            : pick(language, "未采用", "Declined")}
                         </p>
                       )}
                     </li>
@@ -358,10 +359,10 @@ export default function GrowthLeadPage() {
             )}
           </Card>
 
-          <Card title="历史对话">
+          <Card title={pick(language, "历史对话", "Conversation history")}>
             {threads.length === 0 && (
               <p className="text-xs text-ink-muted">
-                还没有保存过对话，可以先从左侧开始交流。
+                {pick(language, "还没有保存过对话，可以先从左侧开始交流。", "No saved conversations yet. Start one on the left.")}
               </p>
             )}
             <ul className="flex flex-col gap-1">
@@ -377,7 +378,7 @@ export default function GrowthLeadPage() {
                   >
                     <span className="block truncate">{t.title}</span>
                     <span className="text-[10px] text-ink-muted">
-                      {fmtDate(t.updatedAt)}
+                      {fmtDate(t.updatedAt, language)}
                     </span>
                   </button>
                 </li>

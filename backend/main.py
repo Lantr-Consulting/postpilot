@@ -15,7 +15,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel
@@ -83,6 +83,14 @@ def _require_active(creator: dict) -> None:
         raise HTTPException(status_code=403, detail="请先确认并启用内容档案，启用前不会生成内容。")
     if creator["paused"]:
         raise HTTPException(status_code=403, detail="PostPilot 已暂停，请在设置中恢复任务。")
+
+
+def _request_language(request: Request) -> str:
+    return "en" if request.headers.get("accept-language", "").lower().startswith("en") else "zh"
+
+
+def _in_language(language: str, zh: str, en: str) -> str:
+    return en if language == "en" else zh
 
 
 # ---------- Account ----------
@@ -267,7 +275,7 @@ def add_material(req: MaterialRequest, user: dict = Depends(auth.current_user)):
 
 
 @app.post("/materials/{material_id}/ingest")
-def ingest_material(material_id: str, user: dict = Depends(auth.current_user)):
+def ingest_material(material_id: str, request: Request, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
@@ -276,18 +284,24 @@ def ingest_material(material_id: str, user: dict = Depends(auth.current_user)):
     if material is None:
         raise HTTPException(status_code=404, detail="没有找到这份材料")
     user_id = user["id"]
+    language = _request_language(request)
 
     def worker(progress, get_steer):
-        progress(f"正在整理“{material['title']}”…")
+        progress(_in_language(language, f"正在整理“{material['title']}”…", f"Processing “{material['title']}”…"))
         db.update_material(user_id, material_id, {"status": "ingesting"})
         try:
             mined = agent.mine_material(
                 {"id": material["id"], "title": material["title"], "text": material["body"]},
                 creator["ip_profile"],
+                language,
             )
             atoms = db.create_atoms(user_id, material, mined)
             db.update_material(user_id, material_id, {"status": "mined", "atom_count": len(atoms)})
-            return f"已从“{material['title']}”整理出 {len(atoms)} 条可引用材料。"
+            return _in_language(
+                language,
+                f"已从“{material['title']}”整理出 {len(atoms)} 条可引用材料。",
+                f"Extracted {len(atoms)} citable items from “{material['title']}”.",
+            )
         except Exception:
             db.update_material(user_id, material_id, {"status": "uploaded"})
             raise
@@ -296,7 +310,7 @@ def ingest_material(material_id: str, user: dict = Depends(auth.current_user)):
 
 
 @app.post("/materials/{material_id}/repurpose")
-def repurpose_material(material_id: str, user: dict = Depends(auth.current_user)):
+def repurpose_material(material_id: str, request: Request, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
@@ -307,14 +321,19 @@ def repurpose_material(material_id: str, user: dict = Depends(auth.current_user)
     if material["status"] != "mined":
         raise HTTPException(status_code=409, detail="请先整理这份材料")
     user_id = user["id"]
+    language = _request_language(request)
 
     def worker(progress, get_steer):
-        progress(f"正在从“{material['title']}”寻找选题…")
-        ideas = agent.repurpose_material(user_id, material, creator["ip_profile"])
+        progress(_in_language(language, f"正在从“{material['title']}”寻找选题…", f"Finding ideas in “{material['title']}”…"))
+        ideas = agent.repurpose_material(user_id, material, creator["ip_profile"], language)
         if not ideas:
             raise RuntimeError("repurposing came back empty — try again")
         db.create_ideas(user_id, ideas)
-        return f"已从“{material['title']}”整理出 {len(ideas)} 个选题，并放进内容工作台。"
+        return _in_language(
+            language,
+            f"已从“{material['title']}”整理出 {len(ideas)} 个选题，并放进内容工作台。",
+            f"Created {len(ideas)} ideas from “{material['title']}” and added them to the Studio.",
+        )
 
     return _start_run(user, "repurpose", worker, material_id=material_id)
 
@@ -324,7 +343,7 @@ class ResearchRequest(BaseModel):
 
 
 @app.post("/research")
-def run_research(req: ResearchRequest, user: dict = Depends(auth.current_user)):
+def run_research(req: ResearchRequest, request: Request, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
@@ -332,33 +351,38 @@ def run_research(req: ResearchRequest, user: dict = Depends(auth.current_user)):
     profile = {**creator["ip_profile"], "niche": creator["niche"]}
     user_id = user["id"]
     mission = req.mission
+    language = _request_language(request)
 
     def worker(progress, get_steer):
         return _research_and_store(user_id, profile, mission,
-                                   on_progress=progress, get_steer=get_steer)
+                                   on_progress=progress, get_steer=get_steer,
+                                   language=language)
 
     return _start_run(user, "research", worker)
 
 
 def _research_and_store(user_id: str, profile: dict, mission: str | None,
-                        on_progress=None, get_steer=None) -> str:
+                        on_progress=None, get_steer=None, language: str = "zh") -> str:
     """Shared by the interactive endpoint and the campaign scheduler."""
     ideas = agent.run_research(user_id, profile, mission,
-                               on_progress=on_progress, get_steer=get_steer)
+                               on_progress=on_progress, get_steer=get_steer,
+                               language=language)
     if not ideas:
         raise RuntimeError("the researcher came back empty — try again")
     rows = db.create_ideas(user_id, ideas)
     # Fresh trends supersede stale proposals from earlier runs.
     superseded = db.supersede_stale_ideas(user_id, rows[0]["run_id"])
-    return (
-        f"{len(rows)} ideas proposed"
-        + (f" · {superseded} stale idea{'s' if superseded != 1 else ''} superseded" if superseded else "")
-        + "."
-    )
+    if language == "en":
+        return (
+            f"{len(rows)} ideas proposed"
+            + (f" · {superseded} stale idea{'s' if superseded != 1 else ''} superseded" if superseded else "")
+            + "."
+        )
+    return f"已提出 {len(rows)} 个选题" + (f"，并更新了 {superseded} 个旧选题" if superseded else "") + "。"
 
 
 @app.post("/ideas/{idea_id}/accept")
-def accept_idea(idea_id: str, user: dict = Depends(auth.current_user)):
+def accept_idea(idea_id: str, request: Request, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
@@ -370,6 +394,7 @@ def accept_idea(idea_id: str, user: dict = Depends(auth.current_user)):
     drafts = agent.draft_variants(
         user["id"], db.idea_out(idea), creator["ip_profile"],
         creator["editorial_rules"], creator["platforms"],
+        _request_language(request),
     )
     rows = db.create_drafts(user["id"], idea, drafts)
     return {"drafts": [db.draft_out(r) for r in rows]}
@@ -541,18 +566,29 @@ def remove_campaign(campaign_id: str, user: dict = Depends(auth.current_user)):
     return {"ok": True}
 
 
-def _campaign_report(campaign: dict, creator: dict, on_progress=None) -> str:
+def _campaign_report(
+    campaign: dict,
+    creator: dict,
+    on_progress=None,
+    language: str = "zh",
+) -> str:
     """One campaign firing. Built-in = the weekly growth review; everything
     else runs the campaign's mission through the researcher."""
     user_id = campaign["user_id"]
     if campaign["built_in"]:
-        return _review_and_store(user_id, creator, on_progress=on_progress)
+        return _review_and_store(user_id, creator, on_progress=on_progress, language=language)
     profile = {**creator["ip_profile"], "niche": creator["niche"]}
-    return _research_and_store(user_id, profile, campaign["prompt"], on_progress=on_progress)
+    return _research_and_store(
+        user_id,
+        profile,
+        campaign["prompt"],
+        on_progress=on_progress,
+        language=language,
+    )
 
 
 @app.post("/campaigns/{campaign_id}/run")
-def run_campaign_now(campaign_id: str, user: dict = Depends(auth.current_user)):
+def run_campaign_now(campaign_id: str, request: Request, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
@@ -562,10 +598,11 @@ def run_campaign_now(campaign_id: str, user: dict = Depends(auth.current_user)):
         raise HTTPException(status_code=404, detail="没有找到这个定时任务")
     campaign = rows[0]
     user_id = user["id"]
+    language = _request_language(request)
 
     def worker(progress, get_steer):
-        progress(f"正在运行“{campaign['title']}”…")
-        report = _campaign_report(campaign, creator, on_progress=progress)
+        progress(_in_language(language, f"正在运行“{campaign['title']}”…", f"Running “{campaign['title']}”…"))
+        report = _campaign_report(campaign, creator, on_progress=progress, language=language)
         db.update_campaign(user_id, campaign_id,
                            {"last_run_at": db._now(), "last_report": report[:500]})
         return report
@@ -624,26 +661,27 @@ def reviews(user: dict = Depends(auth.current_user)):
 
 
 @app.post("/reviews/run")
-def run_review(user: dict = Depends(auth.current_user)):
+def run_review(request: Request, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     creator = _creator(user)
     _require_active(creator)
     user_id = user["id"]
+    language = _request_language(request)
 
     def worker(progress, get_steer):
-        return _review_and_store(user_id, creator, on_progress=progress)
+        return _review_and_store(user_id, creator, on_progress=progress, language=language)
 
     return _start_run(user, "review", worker)
 
 
-def _review_and_store(user_id: str, creator: dict, on_progress=None) -> str:
+def _review_and_store(user_id: str, creator: dict, on_progress=None, language: str = "zh") -> str:
     """Shared by the interactive endpoint and the campaign scheduler."""
     def progress(msg):
         if on_progress:
             on_progress(msg)
 
-    progress("正在查看内容目标、创作记录和发布结果…")
+    progress(_in_language(language, "正在查看内容目标、创作记录和发布结果…", "Reviewing goals, creative history, and published results…"))
     ideas = [db.idea_out(i) for i in db.list_ideas(user_id)]
     drafts = [db.draft_out(d) for d in db.list_drafts(user_id)]
     results = [db.result_out(r) for r in db.list_results(user_id)]
@@ -666,8 +704,8 @@ def _review_and_store(user_id: str, creator: dict, on_progress=None) -> str:
         ],
         "declineLessons": db.decline_lessons(user_id),
     }
-    progress("正在整理内容回顾…")
-    review = agent.growth_review(user_id, creator["ip_profile"], stats)
+    progress(_in_language(language, "正在整理内容回顾…", "Preparing your content review…"))
+    review = agent.growth_review(user_id, creator["ip_profile"], stats, language)
     if review is None:
         raise RuntimeError("the review came back empty — try again")
     db.create_review(user_id, review["summary"], review["moves"])
@@ -736,13 +774,13 @@ Rules:
 
 
 @app.post("/interpret-profile")
-def interpret_profile(req: InterpretRequest, user: dict | None = Depends(auth.optional_user)):
+def interpret_profile(req: InterpretRequest, request: Request, user: dict | None = Depends(auth.optional_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     resp = llm.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": INTERPRET_SYSTEM},
+            {"role": "system", "content": INTERPRET_SYSTEM + "\n" + agent._language_rule(_request_language(request))},
             {"role": "user", "content": req.text.strip()[:4000]},
         ],
         response_format={"type": "json_object"},
@@ -881,7 +919,7 @@ def thread_messages(thread_id: str, user: dict = Depends(auth.current_user)):
 
 
 @app.post("/chat")
-def chat(req: ChatRequest, user: dict | None = Depends(auth.optional_user)):
+def chat(req: ChatRequest, request: Request, user: dict | None = Depends(auth.optional_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
     profile = req.profile
@@ -890,7 +928,8 @@ def chat(req: ChatRequest, user: dict | None = Depends(auth.optional_user)):
     context = ""
     if profile:
         context = "\n\nCreator IP profile (their blessed brand book):\n" + json.dumps(profile)[:4000]
-    messages = [{"role": "system", "content": CHAT_SYSTEM + context + FINAL_CHECK}]
+    language = _request_language(request)
+    messages = [{"role": "system", "content": CHAT_SYSTEM + context + FINAL_CHECK + "\n\n" + agent._language_rule(language)}]
     for m in req.history[-12:]:
         if m.role in ("user", "assistant") and m.content.strip():
             messages.append({"role": m.role, "content": m.content.strip()[:2000]})
@@ -903,7 +942,10 @@ def chat(req: ChatRequest, user: dict | None = Depends(auth.optional_user)):
     thread_id = req.threadId
     if user is not None:
         if thread_id is None:
-            thread_id = db.create_thread(user["id"], req.message.strip()[:60] or "新对话")["id"]
+            thread_id = db.create_thread(
+                user["id"],
+                req.message.strip()[:60] or _in_language(language, "新对话", "New conversation"),
+            )["id"]
         db.add_message(user["id"], thread_id, "user", req.message.strip())
         db.add_message(user["id"], thread_id, "assistant", reply)
         db.touch_thread(user["id"], thread_id)

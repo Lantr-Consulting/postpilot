@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   CREATOR,
@@ -10,14 +12,16 @@ import {
 } from "@/lib/mock";
 import { fmtDayShort } from "@/lib/format";
 import { Card, DraftBadge, PlatformChip, SectionHeading, Stat } from "@/components/ui";
+import { pick, useLanguage } from "@/lib/language";
 
 export default function TodayPage() {
+  const language = useLanguage();
   const todaysDrafts = DRAFTS.filter((d) => d.slotDate === TODAY);
 
   return (
     <div className="flex flex-col gap-5">
       <SectionHeading
-        title={`${CREATOR.name.split(" ")[0]}，你好`}
+        title={pick(language, `${CREATOR.name.split(" ")[0]}，你好`, `Good morning, ${CREATOR.name}`)}
         sub={CREATOR.ipProfile.positioning}
       />
 
@@ -27,7 +31,7 @@ export default function TodayPage() {
           {WEEK_DATES.map((date) => {
             const slotted = DRAFTS.filter((d) => d.slotDate === date);
             const isToday = date === TODAY;
-            const { day, num } = fmtDayShort(date);
+            const { day, num } = fmtDayShort(date, language);
             return (
               <Link
                 key={date}
@@ -62,30 +66,30 @@ export default function TodayPage() {
       {/* Pipeline counts */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat
-          label="待整理的材料"
+          label={pick(language, "待整理的材料", "Materials to mine")}
           value={PIPELINE_COUNTS.materialsToMine}
-          hint="在材料库中"
+          hint={pick(language, "在材料库中", "in the Library")}
         />
         <Stat
-          label="待确认的选题"
+          label={pick(language, "待确认的选题", "Ideas awaiting you")}
           value={PIPELINE_COUNTS.ideasAwaiting}
-          hint="在内容工作台中"
+          hint={pick(language, "在内容工作台中", "in the Studio")}
         />
         <Stat
-          label="待审核的初稿"
+          label={pick(language, "待审核的初稿", "Drafts to review")}
           value={PIPELINE_COUNTS.draftsToApprove}
-          hint="已完成规则检查"
+          hint={pick(language, "已完成规则检查", "checked by the engine")}
         />
         <Stat
-          label="可以导出的内容"
+          label={pick(language, "可以导出的内容", "Ready to export")}
           value={PIPELINE_COUNTS.readyToExport}
-          hint="已通过并排入日历"
+          hint={pick(language, "已通过并排入日历", "approved and on the calendar")}
         />
-        <Stat label="连续发布" value={`${STREAK_DAYS} 天`} hint="由你发布，产品负责记录" />
+        <Stat label={pick(language, "连续发布", "Posting streak")} value={pick(language, `${STREAK_DAYS} 天`, `${STREAK_DAYS}d`)} hint={pick(language, "由你发布，产品负责记录", "you post; PostPilot counts")} />
       </div>
 
       {/* Growth Lead insight — pinned to the desk like an index card */}
-      <Card title="内容顾问的建议">
+      <Card title={pick(language, "内容顾问的建议", "From your content advisor")}>
         <div className="index-card rounded-xl px-4 pb-4 pt-3">
           <p className="font-display text-[17px] leading-[28px] text-ink">
             {LATEST_INSIGHT}
@@ -93,20 +97,19 @@ export default function TodayPage() {
         </div>
         <div className="mt-4 flex gap-2">
           <Link href="/studio" className="btn-primary px-4 py-2 text-sm">
-            打开内容工作台
+            {pick(language, "打开内容工作台", "Open the Studio")}
           </Link>
           <Link href="/growth-lead" className="btn-ghost px-4 py-2 text-sm">
-            继续讨论
+            {pick(language, "继续讨论", "Ask about it")}
           </Link>
         </div>
       </Card>
 
       {/* Today's slotted drafts */}
-      <Card title="今天计划发布">
+      <Card title={pick(language, "今天计划发布", "On the calendar today")}>
         {todaysDrafts.length === 0 ? (
           <p className="text-sm text-ink-muted">
-            今天还没有安排内容。内容工作台里有 {PIPELINE_COUNTS.ideasAwaiting}{" "}
-            个选题等待确认。
+            {pick(language, `今天还没有安排内容。内容工作台里有 ${PIPELINE_COUNTS.ideasAwaiting} 个选题等待确认。`, `Nothing is scheduled today. The Studio has ${PIPELINE_COUNTS.ideasAwaiting} ideas waiting.`)}
           </p>
         ) : (
           <ul className="flex flex-col gap-3">

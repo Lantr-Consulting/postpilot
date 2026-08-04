@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { CREATOR } from "@/lib/mock";
+import { pick, useLanguage } from "@/lib/language";
 import { supabase } from "@/lib/supabase";
 
 function Icon({ children }: { children: ReactNode }) {
@@ -26,7 +27,7 @@ function Icon({ children }: { children: ReactNode }) {
 const NAV = [
   {
     href: "/today",
-    label: "今日",
+    label: { zh: "今日", en: "Today" },
     icon: (
       <Icon>
         <circle cx="12" cy="12" r="4" />
@@ -36,7 +37,7 @@ const NAV = [
   },
   {
     href: "/studio",
-    label: "内容工作台",
+    label: { zh: "内容工作台", en: "Content studio" },
     icon: (
       <Icon>
         <path d="M12 19l7-7 3 3-7 7-3-3z" />
@@ -48,7 +49,7 @@ const NAV = [
   },
   {
     href: "/library",
-    label: "材料库",
+    label: { zh: "材料库", en: "Library" },
     icon: (
       <Icon>
         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -58,7 +59,7 @@ const NAV = [
   },
   {
     href: "/calendar",
-    label: "内容日历",
+    label: { zh: "内容日历", en: "Calendar" },
     icon: (
       <Icon>
         <rect x="3" y="4" width="18" height="17" rx="2" />
@@ -68,7 +69,7 @@ const NAV = [
   },
   {
     href: "/settings",
-    label: "设置",
+    label: { zh: "设置", en: "Settings" },
     icon: (
       <Icon>
         <circle cx="12" cy="12" r="3" />
@@ -79,6 +80,7 @@ const NAV = [
 ];
 
 function Wordmark() {
+  const language = useLanguage();
   return (
     <div className="flex items-center gap-2.5 px-3 pb-6 pt-1">
       <span className="flex size-7 items-center justify-center rounded-lg bg-accent">
@@ -103,7 +105,7 @@ function Wordmark() {
           PostPilot
         </span>
         <span className="block text-[11px] leading-tight text-ink-muted">
-          内容创作助手 · 演示数据
+          {pick(language, "内容创作助手 · 演示数据", "Content assistant · Demo data")}
         </span>
       </span>
     </div>
@@ -112,6 +114,7 @@ function Wordmark() {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const language = useLanguage();
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-hairline bg-page px-3 py-5 max-md:hidden">
       <Wordmark />
@@ -131,7 +134,7 @@ export function Sidebar() {
               <span className={active ? "text-accent" : "text-ink-muted"}>
                 {item.icon}
               </span>
-              {item.label}
+              {item.label[language]}
             </Link>
           );
         })}
@@ -139,9 +142,9 @@ export function Sidebar() {
       <div className="mt-auto flex flex-col gap-3 px-3">
         <AccountBox />
         <div className="text-[11px] leading-relaxed text-ink-muted">
-          Lantr 往届学生作品 · 课程结束后继续托管。
+          {pick(language, "Lantr 往届学生作品 · 课程结束后继续托管。", "Past Lantr student project · Hosted after the program.")}
           <br />
-          初稿由你审核，也由你亲自发布。
+          {pick(language, "初稿由你审核，也由你亲自发布。", "You review every draft and publish it yourself.")}
         </div>
       </div>
     </aside>
@@ -149,6 +152,7 @@ export function Sidebar() {
 }
 
 function AccountBox() {
+  const language = useLanguage();
   const [email, setEmail] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
@@ -169,14 +173,14 @@ function AccountBox() {
         <div className="rounded-lg border border-hairline px-3 py-2">
           <div className="truncate text-xs font-medium">{CREATOR.name}</div>
           <div className="mt-0.5 text-xs text-ink-muted">
-            {CREATOR.handle} · 演示创作者
+            {CREATOR.handle} · {pick(language, "演示创作者", "demo creator")}
           </div>
         </div>
         <Link
           href="/signin"
           className="btn-ghost px-3 py-2 text-center text-sm font-medium"
         >
-          登录
+          {pick(language, "登录", "Sign in")}
         </Link>
       </div>
     );
@@ -189,7 +193,7 @@ function AccountBox() {
         onClick={() => supabase.auth.signOut().then(() => window.location.assign("/"))}
         className="mt-0.5 text-xs text-ink-muted hover:text-ink"
       >
-        退出登录
+        {pick(language, "退出登录", "Sign out")}
       </button>
     </div>
   );
@@ -197,6 +201,7 @@ function AccountBox() {
 
 export function MobileNav() {
   const pathname = usePathname();
+  const language = useLanguage();
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-hairline bg-page px-3 py-2 md:hidden">
       {NAV.map((item) => {
@@ -209,7 +214,7 @@ export function MobileNav() {
               active ? "bg-wash-2 font-medium text-ink" : "text-ink-2"
             }`}
           >
-            {item.label}
+            {item.label[language]}
           </Link>
         );
       })}

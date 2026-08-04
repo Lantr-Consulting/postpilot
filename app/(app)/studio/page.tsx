@@ -26,13 +26,14 @@ import {
   PlatformChip,
   SectionHeading,
 } from "@/components/ui";
+import { pick, useLanguage } from "@/lib/language";
 
-const SOURCE_LABEL: Record<TrendSource, string> = {
-  youtube: "YouTube",
-  reddit: "Reddit",
-  bluesky: "Bluesky",
-  news: "新闻",
-  trends: "搜索趋势",
+const SOURCE_LABEL: Record<TrendSource, { zh: string; en: string }> = {
+  youtube: { zh: "YouTube", en: "YouTube" },
+  reddit: { zh: "Reddit", en: "Reddit" },
+  bluesky: { zh: "Bluesky", en: "Bluesky" },
+  news: { zh: "新闻", en: "News" },
+  trends: { zh: "搜索趋势", en: "Search trends" },
 };
 
 function apiMessage(e: unknown, fallback: string): string {
@@ -41,6 +42,7 @@ function apiMessage(e: unknown, fallback: string): string {
 
 export default function StudioPage() {
   const toast = useToast();
+  const language = useLanguage();
   const { ws, live, refresh } = useWorkspace();
 
   // Mock-mode local state — the offline fallback keeps its M1 interactivity.
@@ -74,23 +76,23 @@ export default function StudioPage() {
 
   async function research() {
     if (!live) {
-      toast("info", "登录后可以建立自己的创作流程；当前显示的是演示数据。");
+      toast("info", pick(language, "登录后可以建立自己的创作流程；当前显示的是演示数据。", "Sign in to build your own workflow. This is demo data."));
       return;
     }
     setResearching(true);
-    setRunProgress("正在准备研究任务…");
+    setRunProgress(pick(language, "正在准备研究任务…", "Preparing research…"));
     try {
       const run = await runResearch();
       setRunId(run.id);
-      const done = await pollRun(run.id, (r) => setRunProgress(r.progress || "正在研究…"));
+      const done = await pollRun(run.id, (r) => setRunProgress(r.progress || pick(language, "正在研究…", "Researching…")));
       await refresh();
       if (done.status === "done") {
-        toast("success", done.report ?? "研究完成。" );
+        toast("success", done.report ?? pick(language, "研究完成。", "Research complete."));
       } else {
-        toast("error", done.report ?? "研究没有完成，请重试。" );
+        toast("error", done.report ?? pick(language, "研究没有完成，请重试。", "Research did not finish. Please try again."));
       }
     } catch (e) {
-      toast("error", apiMessage(e, "无法开始研究，请稍后重试。"));
+      toast("error", apiMessage(e, pick(language, "无法开始研究，请稍后重试。", "Unable to start research. Please try again.")));
     }
     setResearching(false);
     setRunId(null);
@@ -103,15 +105,15 @@ export default function StudioPage() {
     setSteerNote("");
     try {
       await steerRun(runId, note);
-      toast("info", "补充要求已保存，整理选题前会先读取。" );
+      toast("info", pick(language, "补充要求已保存，整理选题前会先读取。", "Direction saved. The run will read it before shaping ideas."));
     } catch {
-      toast("info", "这次研究已经结束，可以在下一次研究前补充要求。" );
+      toast("info", pick(language, "这次研究已经结束，可以在下一次研究前补充要求。", "This run has already finished. Add that direction before the next one."));
     }
   }
 
   async function decideIdea(id: string, status: "accepted" | "declined") {
     if (status === "declined") {
-      const reason = window.prompt("为什么不采用？这个原因会成为下次研究的参考。" );
+      const reason = window.prompt(pick(language, "为什么不采用？这个原因会成为下次研究的参考。", "Why not? This will guide the next research run."));
       if (reason === null) return;
       if (live) {
         await declineIdea(id, reason).catch(() => {});
@@ -121,7 +123,7 @@ export default function StudioPage() {
           xs.map((i) => (i.id === id ? { ...i, status, declineReason: reason } : i))
         );
       }
-      toast("info", "已标记为不采用，下次研究会参考你填写的原因。" );
+      toast("info", pick(language, "已标记为不采用，下次研究会参考你填写的原因。", "Declined. Your reason will guide the next run."));
       return;
     }
     if (live) {
@@ -129,14 +131,14 @@ export default function StudioPage() {
       try {
         const { drafts: fresh } = await acceptIdea(id);
         await refresh();
-        toast("success", `已为 ${fresh.length} 个平台准备初稿并完成检查。`);
+        toast("success", pick(language, `已为 ${fresh.length} 个平台准备初稿并完成检查。`, `${fresh.length} platform drafts are ready and checked.`));
       } catch (e) {
-        toast("error", apiMessage(e, "初稿生成失败，请重新尝试。"));
+        toast("error", apiMessage(e, pick(language, "初稿生成失败，请重新尝试。", "Drafting failed. Please try again.")));
       }
       setDraftingIdea(null);
     } else {
       setMockIdeas((xs) => xs.map((i) => (i.id === id ? { ...i, status } : i)));
-      toast("success", "选题已采用，初稿会显示在下方。（演示数据）" );
+      toast("success", pick(language, "选题已采用，初稿会显示在下方。（演示数据）", "Idea accepted. Drafts will appear below. (Demo data)"));
     }
   }
 
@@ -145,10 +147,10 @@ export default function StudioPage() {
     if (live) {
       await editDraft(d.id, text).catch(() => {});
       await refresh();
-      toast("info", "修改已保存，产品已经重新检查文字。" );
+      toast("info", pick(language, "修改已保存，产品已经重新检查文字。", "Edit saved and checks rerun."));
     } else {
       setMockDrafts((xs) => xs.map((x) => (x.id === d.id ? { ...x, text } : x)));
-      toast("info", "修改已保存；通过初稿时会再次检查。" );
+      toast("info", pick(language, "修改已保存；通过初稿时会再次检查。", "Edit saved. The draft will be checked again on approval."));
     }
   }
 
@@ -157,7 +159,7 @@ export default function StudioPage() {
       setMockDrafts((xs) =>
         xs.map((x) => (x.id === d.id ? { ...x, status: "approved" } : x))
       );
-      toast("success", "初稿已通过，最终文字已重新检查。" );
+      toast("success", pick(language, "初稿已通过，最终文字已重新检查。", "Draft approved after a final check."));
       return;
     }
     setBusyDraft(d.id);
@@ -165,18 +167,18 @@ export default function StudioPage() {
       const { blockedChecks } = await approveDraft(d.id, d.text);
       await refresh();
       if (blockedChecks) {
-        toast("error", "这篇初稿还有未通过的检查，请先处理标记项。" );
+        toast("error", pick(language, "这篇初稿还有未通过的检查，请先处理标记项。", "This draft still has failed checks. Resolve them first."));
       } else {
-        toast("success", "初稿已通过并排入内容日历。" );
+        toast("success", pick(language, "初稿已通过并排入内容日历。", "Draft approved and added to the calendar."));
       }
     } catch {
-      toast("error", "无法通过这篇初稿，请稍后重试。" );
+      toast("error", pick(language, "无法通过这篇初稿，请稍后重试。", "Unable to approve this draft. Please try again."));
     }
     setBusyDraft(null);
   }
 
   async function decline(d: Draft) {
-    const reason = window.prompt("为什么不采用？这个原因会成为下次写作的参考。" );
+    const reason = window.prompt(pick(language, "为什么不采用？这个原因会成为下次写作的参考。", "Why not? This will guide future drafts."));
     if (reason === null) return;
     if (live) {
       await declineDraft(d.id, reason).catch(() => {});
@@ -186,7 +188,7 @@ export default function StudioPage() {
         xs.map((x) => (x.id === d.id ? { ...x, status: "declined" } : x))
       );
     }
-    toast("info", "已标记为不采用，下次写作会参考这个原因。" );
+    toast("info", pick(language, "已标记为不采用，下次写作会参考这个原因。", "Declined. The reason will guide future drafts."));
   }
 
   async function copyExport(d: Draft) {
@@ -200,7 +202,7 @@ export default function StudioPage() {
         xs.map((x) => (x.id === d.id ? { ...x, status: "exported" } : x))
       );
     }
-    toast("success", "内容已复制，请前往对应平台发布。" );
+    toast("success", pick(language, "内容已复制，请前往对应平台发布。", "Copied. Open the platform and publish it yourself."));
   }
 
   const knownAtoms = new Map(atoms.map((a) => [a.id, a]));
@@ -208,22 +210,22 @@ export default function StudioPage() {
   return (
     <div className="flex flex-col gap-5">
       <SectionHeading
-        title="内容工作台"
-        sub="查看近期动态和真实材料，确认选题，审核初稿，再由你亲自导出和发布。"
+        title={pick(language, "内容工作台", "Content studio")}
+        sub={pick(language, "查看近期动态和真实材料，确认选题，审核初稿，再由你亲自导出和发布。", "Review live signals and source material, choose ideas, review drafts, then export and publish them yourself.")}
       />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
         <div className="flex flex-col gap-5">
           {/* Ideas */}
           <Card
-            title="待确认的选题"
+            title={pick(language, "待确认的选题", "Ideas awaiting review")}
             action={
               <button
                 onClick={research}
                 disabled={researching}
                 className="btn-primary px-3.5 py-1.5 text-xs"
               >
-                {researching ? "正在研究…" : "开始研究"}
+                {researching ? pick(language, "正在研究…", "Researching…") : pick(language, "开始研究", "Start research")}
               </button>
             }
           >
@@ -231,25 +233,25 @@ export default function StudioPage() {
               <div className="index-card mb-4 rounded-xl p-3.5">
                 <p className="flex items-center gap-2 text-xs text-ink-2">
                   <span aria-hidden className="inline-block size-2 animate-pulse rounded-full bg-accent" />
-                  {runProgress || "正在研究…"}
+                  {runProgress || pick(language, "正在研究…", "Researching…")}
                 </p>
                 <div className="mt-2.5 flex gap-2">
                   <input
                     value={steerNote}
                     onChange={(e) => setSteerNote(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && sendSteer()}
-                    placeholder="补充要求，例如：更关注邮件通讯的角度"
+                    placeholder={pick(language, "补充要求，例如：更关注邮件通讯的角度", "Add direction, e.g. focus more on newsletter angles")}
                     className="flex-1 rounded-full border border-hairline bg-page px-3.5 py-1.5 text-xs text-ink placeholder:text-ink-muted"
                   />
                   <button onClick={sendSteer} className="btn-ghost px-3 py-1.5 text-xs">
-                    发送
+                    {pick(language, "发送", "Send")}
                   </button>
                 </div>
               </div>
             )}
             {ideas.length === 0 ? (
               <p className="text-sm text-ink-muted">
-                还没有选题。开始研究后，产品会查看近期动态和材料库，并说明每个选题的依据。
+                {pick(language, "还没有选题。开始研究后，产品会查看近期动态和材料库，并说明每个选题的依据。", "No ideas yet. Start research to scan current signals and your library, with evidence for every idea.")}
               </p>
             ) : (
               <ul className="flex flex-col gap-3">
@@ -262,7 +264,7 @@ export default function StudioPage() {
                           {idea.pillar}
                           {idea.narrative && (
                             <span className="rounded-full bg-atom-quote/15 px-2 py-0.5 text-[10px] font-medium text-atom-quote">
-                              故事线：{idea.narrative}
+                              {pick(language, "故事线：", "Arc: ")}{idea.narrative}
                             </span>
                           )}
                         </div>
@@ -282,7 +284,7 @@ export default function StudioPage() {
                                 : "bg-wash-2 text-ink-2"
                             }`}
                           >
-                            {e.atomId ? "你的材料" : e.source}
+                            {e.atomId ? pick(language, "你的材料", "Your material") : e.source}
                           </span>
                           <span className="text-ink-muted">{e.datum}</span>
                         </li>
@@ -290,7 +292,7 @@ export default function StudioPage() {
                     </ul>
                     {idea.declineReason && (
                       <p className="mt-2 rounded-lg bg-wash px-3 py-2 text-xs text-ink-muted">
-                        下次研究需要注意：{idea.declineReason}
+                        {pick(language, "下次研究需要注意：", "Direction for the next run: ")}{idea.declineReason}
                       </p>
                     )}
                     {idea.status === "proposed" && (
@@ -301,14 +303,14 @@ export default function StudioPage() {
                           className="btn-primary px-3.5 py-1.5 text-xs"
                         >
                           {draftingIdea === idea.id
-                            ? "正在准备初稿…"
-                            : "采用并生成初稿"}
+                            ? pick(language, "正在准备初稿…", "Drafting…")
+                            : pick(language, "采用并生成初稿", "Accept and draft")}
                         </button>
                         <button
                           onClick={() => decideIdea(idea.id, "declined")}
                           className="btn-ghost px-3.5 py-1.5 text-xs"
                         >
-                          不采用…
+                          {pick(language, "不采用…", "Decline…")}
                         </button>
                       </div>
                     )}
@@ -319,10 +321,10 @@ export default function StudioPage() {
           </Card>
 
           {/* Drafts */}
-          <Card title="待审核的初稿">
+          <Card title={pick(language, "待审核的初稿", "Drafts to review")}>
             {drafts.length === 0 ? (
               <p className="text-sm text-ink-muted">
-                采用上方选题后，不同平台的初稿会出现在这里，并先完成内容规则检查。
+                {pick(language, "采用上方选题后，不同平台的初稿会出现在这里，并先完成内容规则检查。", "Accept an idea above and platform-specific drafts will appear here after editorial checks.")}
               </p>
             ) : (
               <ul className="flex flex-col gap-3">
@@ -341,7 +343,7 @@ export default function StudioPage() {
                           <PlatformChip platform={d.platform} />
                           {d.sponsored && (
                             <span className="rounded-full bg-critical/15 px-2 py-0.5 text-[11px] font-semibold text-critical">
-                              含推广内容
+                              {pick(language, "含推广内容", "Sponsored")}
                             </span>
                           )}
                           <span className="truncate text-xs text-ink-muted">
@@ -372,7 +374,7 @@ export default function StudioPage() {
 
                       {cited.length > 0 && (
                         <p className="mt-2 text-xs text-ink-muted">
-                          使用材料：{" "}
+                          {pick(language, "使用材料：", "Sources: ")}{" "}
                           {cited.map((a, index) => a && (
                             <span key={a.id}>
                               {index > 0 && " · "}
@@ -396,21 +398,21 @@ export default function StudioPage() {
                                 onClick={() => approve(d)}
                                 disabled={blocked || busyDraft === d.id}
                                 className="btn-primary px-3.5 py-1.5 text-xs"
-                                title={blocked ? "请先处理未通过的检查" : undefined}
+                                title={blocked ? pick(language, "请先处理未通过的检查", "Resolve failed checks first") : undefined}
                               >
-                                {busyDraft === d.id ? "正在检查…" : "通过"}
+                                {busyDraft === d.id ? pick(language, "正在检查…", "Checking…") : pick(language, "通过", "Approve")}
                               </button>
                               <button
                                 onClick={() => setEditing(d.id)}
                                 className="btn-ghost px-3.5 py-1.5 text-xs"
                               >
-                                修改
+                                {pick(language, "修改", "Edit")}
                               </button>
                               <button
                                 onClick={() => decline(d)}
                                 className="btn-ghost px-3.5 py-1.5 text-xs"
                               >
-                                不采用
+                                {pick(language, "不采用", "Decline")}
                               </button>
                             </>
                           )}
@@ -419,12 +421,12 @@ export default function StudioPage() {
                               onClick={() => copyExport(d)}
                               className="btn-primary px-3.5 py-1.5 text-xs"
                             >
-                              复制并导出
+                              {pick(language, "复制并导出", "Copy and export")}
                             </button>
                           )}
                           {blocked && (
                             <span className="self-center text-xs text-critical">
-                              处理完标记项后才能通过。
+                              {pick(language, "处理完标记项后才能通过。", "Resolve the flagged checks before approval.")}
                             </span>
                           )}
                         </div>
@@ -440,12 +442,12 @@ export default function StudioPage() {
         {/* Niche radar rail */}
         <div className="flex flex-col gap-5">
           <Card
-            title="选题动态"
+            title={pick(language, "选题动态", "Signal radar")}
             action={
               <span
                 className={`text-xs font-medium ${radarLive ? "text-good" : "text-ink-muted"}`}
               >
-                {radarLive ? "实时" : "演示"}
+                {radarLive ? pick(language, "实时", "Live") : pick(language, "演示", "Demo")}
               </span>
             }
           >
@@ -453,7 +455,7 @@ export default function StudioPage() {
               {trends.map((t) => (
                 <li key={t.id} className="rounded-xl bg-surface-2 p-3">
                   <span className="rounded-full bg-wash-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-                    {SOURCE_LABEL[t.source]}
+                    {SOURCE_LABEL[t.source][language]}
                   </span>
                   <p className="mt-1.5 text-xs leading-relaxed text-ink-2">
                     {t.url ? (

@@ -3,6 +3,7 @@
 // and with no network at all (the Milestone 1 experience is the fallback).
 
 import { supabase } from "./supabase";
+import { getLanguage } from "./language";
 import type {
   Atom,
   Campaign,
@@ -46,6 +47,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      "Accept-Language": getLanguage() === "en" ? "en" : "zh-CN",
       ...(await authHeaders()),
       ...init?.headers,
     },

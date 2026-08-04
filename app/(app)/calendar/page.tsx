@@ -4,9 +4,11 @@ import { DRAFTS, TODAY, WEEK_DATES } from "@/lib/mock";
 import { fmtDate, fmtDayShort } from "@/lib/format";
 import { useToast } from "@/components/toast";
 import { Card, DraftBadge, PlatformChip, SectionHeading } from "@/components/ui";
+import { pick, useLanguage } from "@/lib/language";
 
 export default function CalendarPage() {
   const toast = useToast();
+  const language = useLanguage();
   const slotted = DRAFTS.filter((d) => d.slotDate);
 
   function copyPack(date: string) {
@@ -14,40 +16,40 @@ export default function CalendarPage() {
       .map((d) => `[${d.platform.toUpperCase()}]\n${d.text}${d.hashtags.length ? `\n${d.hashtags.join(" ")}` : ""}`)
       .join("\n\n---\n\n");
     navigator.clipboard?.writeText(pack).catch(() => {});
-    toast("success", `${fmtDate(date)} 的发布内容已复制，请前往对应平台发布。`);
+    toast("success", pick(language, `${fmtDate(date, language)} 的发布内容已复制，请前往对应平台发布。`, `Export pack for ${fmtDate(date, language)} copied. Go post it!`));
   }
 
   return (
     <div className="flex flex-col gap-5">
       <SectionHeading
-        title="内容日历"
-        sub="通过审核的内容会排到这里。复制当天内容后，由你前往对应平台发布。"
+        title={pick(language, "内容日历", "Calendar")}
+        sub={pick(language, "通过审核的内容会排到这里。复制当天内容后，由你前往对应平台发布。", "Approved drafts, slotted. Copy a day's export pack and publish it yourself.")}
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {WEEK_DATES.map((date) => {
           const drafts = slotted.filter((d) => d.slotDate === date);
           const isToday = date === TODAY;
-          const { num } = fmtDayShort(date);
+          const { num } = fmtDayShort(date, language);
           return (
             <Card
               key={date}
               className={isToday ? "ring-1 ring-accent/50" : ""}
-              title={`${fmtDate(date)}${isToday ? " · 今天" : ""}`}
+              title={`${fmtDate(date, language)}${isToday ? pick(language, " · 今天", " · today") : ""}`}
               action={
                 drafts.length > 0 ? (
                   <button
                     onClick={() => copyPack(date)}
                     className="btn-ghost px-2.5 py-1 text-[11px]"
                   >
-                    复制当天内容
+                    {pick(language, "复制当天内容", "Copy pack")}
                   </button>
                 ) : undefined
               }
             >
               {drafts.length === 0 ? (
                 <p className="text-xs text-ink-muted">
-                  {num % 2 === 0 ? "今天不发布内容。" : "还有空余时段。"}
+                  {num % 2 === 0 ? pick(language, "今天不发布内容。", "Rest day — nothing slotted.") : pick(language, "还有空余时段。", "Open slot.")}
                 </p>
               ) : (
                 <ul className="flex flex-col gap-2.5">
@@ -69,12 +71,12 @@ export default function CalendarPage() {
         })}
       </div>
 
-      <Card title="发布流程">
+      <Card title={pick(language, "发布流程", "How posting works")}>
         <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm text-ink-2">
-          <li>在内容工作台中审核初稿，产品会再次检查最终文字。</li>
-          <li>通过的内容会按平台和日期排进日历。</li>
-          <li>复制当天内容，粘贴到对应平台，再由你亲自发布。</li>
-          <li>发布后记录数据，内容顾问会根据实际表现提出下一轮建议。</li>
+          <li>{pick(language, "在内容工作台中审核初稿，产品会再次检查最终文字。", "Approve drafts in the Studio; the final text is checked again.")}</li>
+          <li>{pick(language, "通过的内容会按平台和日期排进日历。", "Approved drafts land here on their scheduled day, tailored by platform.")}</li>
+          <li>{pick(language, "复制当天内容，粘贴到对应平台，再由你亲自发布。", "Copy the day's pack, paste it into each platform, and publish it yourself.")}</li>
+          <li>{pick(language, "发布后记录数据，内容顾问会根据实际表现提出下一轮建议。", "Log results in Performance so the content advisor can learn what worked.")}</li>
         </ol>
       </Card>
     </div>

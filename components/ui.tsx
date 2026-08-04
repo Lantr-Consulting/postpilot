@@ -1,3 +1,5 @@
+"use client";
+
 import type { ReactNode } from "react";
 import type {
   AtomKind,
@@ -7,16 +9,18 @@ import type {
   RuleCheck,
 } from "@/lib/types";
 import { PLATFORM_LABEL } from "@/lib/types";
+import { pick, useLanguage } from "@/lib/language";
 
 export function DisclaimerBanner() {
+  const language = useLanguage();
   return (
     <div className="flex items-center gap-2 border-b border-hairline bg-page px-5 py-1.5 text-[11px] text-ink-muted">
       <span aria-hidden className="inline-block size-2 rounded-full bg-accent" />
       <span>
         <strong className="font-semibold text-ink">
-          AI 只负责准备初稿，发布前的每一项内容都由你审核。
+          {pick(language, "AI 只负责准备初稿，发布前的每一项内容都由你审核。", "AI prepares drafts; you review every item before it goes anywhere.")}
         </strong>{" "}
-        内容表现由用户自行记录，PostPilot 不会代替你发布。
+        {pick(language, "内容表现由用户自行记录，PostPilot 不会代替你发布。", "You log results yourself, and PostPilot never publishes for you.")}
       </span>
     </div>
   );
@@ -71,39 +75,41 @@ export function Stat({
   );
 }
 
-const IDEA_STYLES: Record<IdeaStatus, { label: string; cls: string }> = {
-  proposed: { label: "等待确认", cls: "bg-accent/15 text-accent" },
-  accepted: { label: "已采用", cls: "bg-good/10 text-good" },
-  declined: { label: "未采用", cls: "bg-wash-2 text-ink-2" },
-  superseded: { label: "已有新版本", cls: "bg-wash-2 text-ink-muted" },
+const IDEA_STYLES: Record<IdeaStatus, { zh: string; en: string; cls: string }> = {
+  proposed: { zh: "等待确认", en: "Awaiting review", cls: "bg-accent/15 text-accent" },
+  accepted: { zh: "已采用", en: "Accepted", cls: "bg-good/10 text-good" },
+  declined: { zh: "未采用", en: "Declined", cls: "bg-wash-2 text-ink-2" },
+  superseded: { zh: "已有新版本", en: "Superseded", cls: "bg-wash-2 text-ink-muted" },
 };
 
 export function IdeaBadge({ status }: { status: IdeaStatus }) {
+  const language = useLanguage();
   const s = IDEA_STYLES[status];
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${s.cls}`}
     >
-      {s.label}
+      {s[language]}
     </span>
   );
 }
 
-const DRAFT_STYLES: Record<DraftStatus, { label: string; cls: string }> = {
-  draft: { label: "等待审核", cls: "bg-accent/15 text-accent" },
-  approved: { label: "已通过", cls: "bg-good/10 text-good" },
-  exported: { label: "已导出", cls: "bg-atom-stat/15 text-atom-stat" },
-  posted: { label: "已发布", cls: "bg-wash-2 text-ink-2" },
-  declined: { label: "未采用", cls: "bg-wash-2 text-ink-muted" },
+const DRAFT_STYLES: Record<DraftStatus, { zh: string; en: string; cls: string }> = {
+  draft: { zh: "等待审核", en: "Draft", cls: "bg-accent/15 text-accent" },
+  approved: { zh: "已通过", en: "Approved", cls: "bg-good/10 text-good" },
+  exported: { zh: "已导出", en: "Exported", cls: "bg-atom-stat/15 text-atom-stat" },
+  posted: { zh: "已发布", en: "Posted", cls: "bg-wash-2 text-ink-2" },
+  declined: { zh: "未采用", en: "Declined", cls: "bg-wash-2 text-ink-muted" },
 };
 
 export function DraftBadge({ status }: { status: DraftStatus }) {
+  const language = useLanguage();
   const s = DRAFT_STYLES[status];
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${s.cls}`}
     >
-      {s.label}
+      {s[language]}
     </span>
   );
 }
@@ -134,30 +140,49 @@ const ATOM_STYLES: Record<AtomKind, string> = {
   stat: "bg-atom-stat/15 text-atom-stat",
 };
 
-const ATOM_LABEL: Record<AtomKind, string> = {
-  story: "经历",
-  take: "观点",
-  lesson: "经验",
-  quote: "原话",
-  stat: "数据",
+const ATOM_LABEL: Record<AtomKind, { zh: string; en: string }> = {
+  story: { zh: "经历", en: "Story" },
+  take: { zh: "观点", en: "Take" },
+  lesson: { zh: "经验", en: "Lesson" },
+  quote: { zh: "原话", en: "Quote" },
+  stat: { zh: "数据", en: "Stat" },
 };
 
 export function AtomBadge({ kind }: { kind: AtomKind }) {
+  const language = useLanguage();
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${ATOM_STYLES[kind]}`}
     >
-      {ATOM_LABEL[kind]}
+      {ATOM_LABEL[kind][language]}
     </span>
   );
 }
 
 // The editorial engine's verdict lines, rendered exactly as persisted.
 export function CheckList({ checks }: { checks: RuleCheck[] }) {
+  const language = useLanguage();
   if (checks.length === 0) return null;
   return (
     <ul className="grid gap-x-6 gap-y-1.5">
-      {checks.map((c, i) => (
+      {checks.map((c, i) => {
+        const englishDetail: Record<string, string> = {
+          platform_length: c.pass ? "Within the platform character limit" : "Over the platform character limit",
+          ftc_disclosure: c.pass ? "Required sponsorship disclosure is present" : "Required sponsorship disclosure is missing",
+          banned_phrases: c.pass ? "No blocked phrases found" : "Contains a blocked phrase",
+          hashtag_cap: c.pass ? "Within the hashtag limit" : "Over the hashtag limit",
+          emoji_cap: c.pass ? "Within the emoji limit" : "Over the emoji limit",
+          duplicate_distance: c.pass ? "Distinct from previously published posts" : "Too similar to a previous post",
+          atom_citation: c.pass ? "Every personal claim resolves to source material" : "A cited source item is missing",
+        };
+        const source = language === "zh"
+          ? c.source
+          : c.source
+              .replace("你的内容检查规则", "Your editorial rules")
+              .replace("PostPilot 材料引用规则", "PostPilot source-grounding rule")
+              .replace("发布格式", "publishing format")
+              .replace("美国联邦贸易委员会（FTC）广告背书指南", "FTC Endorsement Guides");
+        return (
         <li key={`${c.rule}-${i}`} className="flex items-start gap-2 text-sm">
           <span
             aria-hidden
@@ -168,12 +193,12 @@ export function CheckList({ checks }: { checks: RuleCheck[] }) {
             {c.pass ? "✓" : "!"}
           </span>
           <span>
-            <span className="text-ink-2">{c.detail}</span>
-            <span className="ml-1.5 text-xs text-ink-muted">({c.source})</span>
-            <span className="sr-only">{c.pass ? "（通过）" : "（需要处理）"}</span>
+            <span className="text-ink-2">{language === "zh" ? c.detail : (englishDetail[c.rule] ?? c.detail)}</span>
+            <span className="ml-1.5 text-xs text-ink-muted">({source})</span>
+            <span className="sr-only">{c.pass ? pick(language, "（通过）", "(passed)") : pick(language, "（需要处理）", "(needs attention)")}</span>
           </span>
         </li>
-      ))}
+      );})}
     </ul>
   );
 }

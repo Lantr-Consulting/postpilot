@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import { CREATOR, TODAY } from "@/lib/mock";
 import { fmtDate } from "@/lib/format";
 import { useLive } from "@/lib/use-live";
+import { LanguageToggle } from "@/components/language-toggle";
+import { pick, useLanguage } from "@/lib/language";
 
 // Sun/moon toggle. Dark is the default set; "light" is stored in
 // localStorage and applied pre-paint by the inline script in layout.tsx.
 function ThemeToggle() {
+  const language = useLanguage();
   const [theme, setTheme] = useState<"dark" | "light" | null>(null);
 
   useEffect(() => {
@@ -35,8 +38,8 @@ function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      aria-label={theme === "light" ? "切换到深色模式" : "切换到浅色模式"}
-      title={theme === "light" ? "深色模式" : "浅色模式"}
+      aria-label={theme === "light" ? pick(language, "切换到深色模式", "Switch to dark mode") : pick(language, "切换到浅色模式", "Switch to light mode")}
+      title={theme === "light" ? pick(language, "深色模式", "Dark mode") : pick(language, "浅色模式", "Light mode")}
       className="btn-ghost size-8 !rounded-full"
     >
       {theme === null ? null : theme === "light" ? (
@@ -73,6 +76,7 @@ function ThemeToggle() {
 
 export function TopBar() {
   const { live, checking } = useLive();
+  const language = useLanguage();
   return (
     <header className="flex items-center justify-between gap-3 border-b border-hairline bg-page px-5 py-3">
       <div className="flex items-center gap-2 text-sm text-ink-2">
@@ -90,10 +94,10 @@ export function TopBar() {
           <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
         </svg>
         <span className="font-medium text-ink">
-          {CREATOR.ipProfile.pillars.length} 个内容方向 ·{" "}
+          {CREATOR.ipProfile.pillars.length} {pick(language, "个内容方向", "content pillars")} ·{" "}
           {CREATOR.niche.topics[0]}
         </span>
-        <span className="text-ink-muted">· {fmtDate(TODAY)}</span>
+        <span className="text-ink-muted">· {fmtDate(TODAY, language)}</span>
       </div>
       <div className="flex items-center gap-2">
         <span
@@ -103,8 +107,9 @@ export function TopBar() {
               : "border border-hairline text-ink-muted"
           }`}
         >
-          {checking ? "…" : live ? "实时数据" : "演示数据"}
+          {checking ? "…" : live ? pick(language, "实时数据", "Live data") : pick(language, "演示数据", "Demo data")}
         </span>
+        <LanguageToggle />
         <ThemeToggle />
       </div>
     </header>
