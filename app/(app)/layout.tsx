@@ -1,6 +1,7 @@
 import { MobileNav, Sidebar } from "@/components/sidebar";
 import { TopBar } from "@/components/topbar";
 import { DisclaimerBanner } from "@/components/ui";
+import { LanguageBoundary } from "@/components/language-boundary";
 
 /* The product shell — sidebar + topbar around every app screen.
    The marketing landing at "/" renders outside this group, bare. */
@@ -17,7 +18,7 @@ export default function AppLayout({
         <DisclaimerBanner />
         <MobileNav />
         <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-y-auto px-5 py-8">
-          {children}
+          <LanguageBoundary>{children}</LanguageBoundary>
         </main>
       </div>
     </div>
