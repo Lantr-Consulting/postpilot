@@ -8,6 +8,7 @@ two samples — this file is deliberately identical in shape.
 
 import os
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import requests as http
@@ -33,7 +34,17 @@ def _resolve(token: str) -> dict[str, Any] | None:
     if r.status_code != 200:
         return None
     body = r.json()
-    user = {"id": body["id"], "email": body.get("email", "")}
+    metadata = body.get("user_metadata") or {}
+    if metadata.get("demo_kind") == "lantr-private-demo":
+        try:
+            expires = datetime.fromisoformat(
+                str(metadata.get("demo_expires_at", "")).replace("Z", "+00:00")
+            )
+            if expires <= datetime.now(timezone.utc):
+                return None
+        except ValueError:
+            return None
+    user = {"id": body["id"], "email": body.get("email", ""), "metadata": metadata}
     _cache[token] = (time.time(), user)
     if len(_cache) > 500:
         _cache.clear()

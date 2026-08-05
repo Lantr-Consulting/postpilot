@@ -25,6 +25,7 @@ load_dotenv()  # must run before auth/db read SUPABASE_* at import time
 import agent  # noqa: E402
 import auth  # noqa: E402
 import db  # noqa: E402
+import demo  # noqa: E402
 import editorial  # noqa: E402
 import research  # noqa: E402
 
@@ -32,7 +33,13 @@ app = FastAPI(title="PostPilot backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3007"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3007",
+        "https://postpilot.lantr.site",
+        "https://lantr.site",
+        "https://www.lantr.site",
+    ],
     allow_origin_regex=r"https://postpilot-[a-z0-9-]+\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,8 +81,153 @@ def health():
     return {"ok": True, "llm": llm is not None, "youtube": bool(research.YOUTUBE_KEY)}
 
 
+class DemoSessionRequest(BaseModel):
+    language: str = "zh"
+    code: str | None = None
+
+
+@app.get("/demo/config")
+def demo_config():
+    return demo.config()
+
+
+@app.post("/demo/session")
+def demo_session(req: DemoSessionRequest, request: Request):
+    return demo.create_session(
+        request,
+        language="en" if req.language == "en" else "zh",
+        code=req.code,
+    )
+
+
+@app.get("/demo/status")
+def demo_status(user: dict = Depends(auth.current_user)):
+    return demo.status(user)
+
+
+@app.post("/demo/reset")
+def demo_reset(request: Request, user: dict = Depends(auth.current_user)):
+    return demo.reset_session(request, user)
+
+
+def _demo_defaults(language: str) -> dict:
+    if language == "en":
+        return {
+            "ipProfile": {
+                "positioning": "Practical strength training for busy professionals, grounded in evidence rather than hype.",
+                "pillars": ["Training myths", "Minimal programs", "Coach's notebook", "Habit design"],
+                "backgroundMd": "I spent eight years in physical therapy before moving into strength coaching. My work focuses on programs that fit demanding jobs and family life.",
+                "narratives": [{"title": "The three-hour training experiment", "arc": "Testing how little weekly training is needed to make durable progress.", "status": "running"}],
+                "voice": {"tone": "Warm, direct, and specific; write like a coach speaking to one person.",
+                          "do": ["Use concrete numbers", "Explain the tradeoff", "Say what the evidence can and cannot show"],
+                          "dont": ["Use guilt as motivation", "Promise transformations", "Invent client stories"],
+                          "catchphrases": ["Build strength for real life"]},
+                "audience": "Busy adults returning to strength training after a long break.",
+                "goals": [{"statement": "Build a trusted weekly newsletter", "horizon": "This year"}],
+            },
+            "editorialRules": {"bannedPhrases": ["game-changer", "crushing it"],
+                               "sponsoredDisclosure": "#ad", "maxHashtags": 4, "maxEmoji": 3},
+            "platforms": ["x", "linkedin", "instagram", "bluesky"],
+            "niche": {"topics": ["minimal strength training", "fitness after 30", "habit design"],
+                      "subreddits": ["fitness", "weightroom"],
+                      "queries": ["minimum effective strength training"]},
+        }
+    return {
+        "ipProfile": {
+            "positioning": "帮助工作繁忙的人用更少但更扎实的训练建立力量：讲证据，不喊口号。",
+            "pillars": ["训练误区", "极简训练", "教练手记", "习惯设计"],
+            "backgroundMd": "我做过八年物理治疗，后来转向力量训练。现在更关注怎样让训练真正适应工作和家庭，而不是要求生活为训练让路。",
+            "narratives": [{"title": "每周三小时训练实验", "arc": "记录更少训练能否带来长期、稳定的进步。", "status": "running"}],
+            "voice": {"tone": "温和、直接、具体，像教练面对一个人说话。",
+                      "do": ["使用具体数字", "说明取舍", "说清楚证据能证明什么"],
+                      "dont": ["用内疚推动行动", "承诺夸张结果", "编造学员故事"],
+                      "catchphrases": ["练出生活真正用得上的力量"]},
+            "audience": "工作忙、停练过一段时间，现在想重新开始力量训练的成年人。",
+            "goals": [{"statement": "把每周通讯做成值得长期订阅的内容", "horizon": "今年"}],
+        },
+        "editorialRules": {"bannedPhrases": ["彻底改变人生", "轻松逆袭"],
+                           "sponsoredDisclosure": "#ad", "maxHashtags": 4, "maxEmoji": 3},
+        "platforms": ["x", "linkedin", "instagram", "bluesky"],
+        "niche": {"topics": ["极简力量训练", "30 岁后的健身", "习惯养成"],
+                  "subreddits": ["fitness", "weightroom"], "queries": ["最低有效训练量"]},
+    }
+
+
+def _seed_demo_workspace(user: dict, creator: dict, language: str) -> None:
+    if db.list_materials(user["id"]):
+        return
+    english = language == "en"
+    material = db.create_material(user["id"], {
+        "title": "Podcast notes: Training that fits real life" if english else "播客笔记：让训练适应真实生活",
+        "kind": "notes",
+        "words": 680,
+        "excerpt": (
+            "The best program is not the one with the most sessions. It is the one a person can recover from and repeat."
+            if english else "最好的计划不是训练次数最多的计划，而是一个人能够恢复、也愿意长期重复的计划。"
+        ),
+        "body": (
+            "After years in physical therapy, I stopped asking how much training someone could survive and started asking what they could repeat. Two focused sessions often beat four rushed ones when work and sleep are already demanding."
+            if english else "做了多年物理治疗以后，我不再只问一个人最多能扛住多少训练，而是先问什么安排能够长期重复。工作和睡眠已经很紧张时，两次专注训练往往比四次匆忙训练更合适。"
+        ),
+    })
+    atoms = db.create_atoms(user["id"], material, [
+        {"kind": "take", "text": (
+            "A plan only works when recovery fits beside work and family life." if english else
+            "训练计划只有和工作、家庭以及恢复时间放在一起考虑，才真正有用。"
+        ), "pillars": ["Minimal programs" if english else "极简训练"]},
+        {"kind": "lesson", "text": (
+            "Two focused sessions can be more repeatable than four rushed sessions." if english else
+            "两次专注训练，可能比四次匆忙训练更容易长期坚持。"
+        ), "pillars": ["Habit design" if english else "习惯设计"]},
+    ])
+    db.update_material(user["id"], material["id"], {"status": "mined", "atom_count": len(atoms)})
+    ideas = db.create_ideas(user["id"], [{
+        "title": "Why two good sessions can beat four rushed ones" if english else "为什么两次认真训练，可能胜过四次匆忙打卡",
+        "angle": "Start with the recovery constraint, then show how to design the week around it." if english else "先讲清楚恢复时间这个限制，再说明怎样据此安排一周训练。",
+        "pillar": "Minimal programs" if english else "极简训练",
+        "rationale": "It connects a common frustration to the creator's own coaching principle." if english else "这个选题把常见困扰和创作者自己的训练原则连在了一起。",
+        "evidence": [{"source": "material", "title": material["title"]}],
+        "runId": "demo-seed",
+    }])
+    text = (
+        "Four training days look ambitious on a calendar.\n\nBut if every session is rushed and recovery never catches up, the plan is not demanding—it is poorly designed.\n\nStart with two focused sessions you can repeat. Add volume only when sleep, work, and soreness leave room for it."
+        if english else
+        "一周练四天，写在计划表上很上进。\n\n但如果每次都在赶时间，身体也来不及恢复，这不叫要求高，只是安排得不合理。\n\n先把两次训练认真完成。等睡眠、工作和恢复真的留出空间，再考虑增加训练量。"
+    )
+    atom_ids = [str(item["id"]) for item in atoms]
+    checks = [
+        {"rule": "platform_length", "detail": "Within LinkedIn's character limit" if english else "没有超过 LinkedIn 的字符上限", "source": "LinkedIn format", "pass": True},
+        {"rule": "banned_phrases", "detail": "No banned phrases found" if english else "没有发现禁用表达", "source": "Creator rules" if english else "你的内容检查规则", "pass": True},
+        {"rule": "atom_citation", "detail": f"Grounded in {material['title']}" if english else f"内容依据：{material['title']}", "source": "PostPilot source rule" if english else "PostPilot 材料引用规则", "pass": True},
+    ]
+    db.create_drafts(user["id"], ideas[0], [{"platform": "linkedin", "text": text,
+                                             "hashtags": [], "sponsored": False,
+                                             "atomIds": atom_ids, "checks": checks}])
+
+
 def _creator(user: dict) -> dict:
-    return db.ensure_creator(user["id"], user["email"], DEFAULTS)
+    if not demo.is_demo_user(user):
+        return db.ensure_creator(user["id"], user["email"], DEFAULTS)
+    language = demo.language_for(user)
+    defaults = _demo_defaults(language)
+    creator = db.ensure_creator(user["id"], user["email"], defaults)
+    if not creator["activated"]:
+        creator = db.update_creator(user["id"], {"activated": True})
+    for campaign in db.list_campaigns(user["id"]):
+        fields = {"enabled": False} if campaign["enabled"] else {}
+        if campaign.get("built_in"):
+            fields.update({
+                "title": "Weekly content review" if language == "en" else "每周内容回顾",
+                "prompt": (
+                    "Review the content goals, recent drafts, calendar, and recorded results, then propose evidence-backed adjustments."
+                    if language == "en" else
+                    "查看内容目标、近期初稿、内容日历和已记录的结果，再提出有依据的调整建议。"
+                ),
+            })
+        if fields:
+            db.update_campaign(user["id"], campaign["id"], fields)
+    _seed_demo_workspace(user, creator, language)
+    return creator
 
 
 def _require_active(creator: dict) -> None:
@@ -97,7 +249,11 @@ def _in_language(language: str, zh: str, en: str) -> str:
 
 @app.get("/me")
 def me(user: dict = Depends(auth.current_user)):
-    return {**db.creator_out(_creator(user)), "email": user["email"]}
+    return {
+        **db.creator_out(_creator(user)),
+        "email": user["email"],
+        "demo": demo.status(user) if demo.is_demo_user(user) else {"isDemo": False},
+    }
 
 
 class SettingsRequest(BaseModel):
@@ -169,6 +325,7 @@ def _start_run(user: dict, kind: str, worker, material_id: str | None = None) ->
     """Claim the per-user lock (a pp_runs insert) and hand the work to a
     background thread. The client gets the run row back immediately and
     polls /runs/{id}; progress and steering live in the row."""
+    demo.consume_ai_action(user)
     run = db.claim_run(user["id"], kind, material_id)
     if run is None:
         raise HTTPException(
@@ -390,6 +547,7 @@ def accept_idea(idea_id: str, request: Request, user: dict = Depends(auth.curren
     idea = db.get_idea(user["id"], idea_id)
     if idea is None:
         raise HTTPException(status_code=404, detail="没有找到这个选题")
+    demo.consume_ai_action(user)
     db.update_idea(user["id"], idea_id, {"status": "accepted"})
     drafts = agent.draft_variants(
         user["id"], db.idea_out(idea), creator["ip_profile"],
@@ -527,6 +685,8 @@ def create_campaign(req: CampaignRequest, user: dict = Depends(auth.current_user
         "cadence": req.cadence if req.cadence in ("manual", "daily", "weekly") else "manual",
         "hourLocal": max(0, min(23, int(req.hourLocal))),
     })
+    if demo.is_demo_user(user):
+        row = db.update_campaign(user["id"], row["id"], {"enabled": False})
     return db.campaign_out(row)
 
 
@@ -550,7 +710,7 @@ def patch_campaign(campaign_id: str, req: CampaignPatch, user: dict = Depends(au
     if req.hourLocal is not None:
         fields["hour_local"] = max(0, min(23, int(req.hourLocal)))
     if req.enabled is not None:
-        fields["enabled"] = bool(req.enabled)
+        fields["enabled"] = False if demo.is_demo_user(user) else bool(req.enabled)
     if not fields:
         raise HTTPException(status_code=400, detail="没有需要更新的内容")
     row = db.update_campaign(user["id"], campaign_id, fields)
@@ -618,6 +778,8 @@ _CADENCE_STALENESS = {"daily": timedelta(hours=20), "weekly": timedelta(days=6)}
 def _scheduler_tick():
     now = datetime.now(timezone.utc)
     for c in db.scheduled_campaigns():
+        if demo.is_demo_user_id(c["user_id"]):
+            continue
         staleness = _CADENCE_STALENESS.get(c["cadence"])
         if staleness is None or now.hour < c["hour_local"]:
             continue
@@ -774,9 +936,10 @@ Rules:
 
 
 @app.post("/interpret-profile")
-def interpret_profile(req: InterpretRequest, request: Request, user: dict | None = Depends(auth.optional_user)):
+def interpret_profile(req: InterpretRequest, request: Request, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
+    demo.consume_ai_action(user)
     resp = llm.chat.completions.create(
         model=MODEL,
         messages=[
@@ -792,8 +955,6 @@ def interpret_profile(req: InterpretRequest, request: Request, user: dict | None
         raise HTTPException(status_code=502, detail="内容档案整理失败，请重试")
     profile = _validate_profile(data)
     niche = profile.pop("_niche")
-    if user is None:
-        return {"profile": profile}
     # Signed in: the interpretation IS the new brand book version — saved,
     # but not active until the user blesses it. The old book goes to history.
     creator = _creator(user)
@@ -919,12 +1080,11 @@ def thread_messages(thread_id: str, user: dict = Depends(auth.current_user)):
 
 
 @app.post("/chat")
-def chat(req: ChatRequest, request: Request, user: dict | None = Depends(auth.optional_user)):
+def chat(req: ChatRequest, request: Request, user: dict = Depends(auth.current_user)):
     if llm is None:
         raise HTTPException(status_code=503, detail="AI 服务尚未配置")
-    profile = req.profile
-    if user is not None:
-        profile = _creator(user)["ip_profile"]
+    demo.consume_ai_action(user)
+    profile = _creator(user)["ip_profile"]
     context = ""
     if profile:
         context = "\n\nCreator IP profile (their blessed brand book):\n" + json.dumps(profile)[:4000]
@@ -940,13 +1100,12 @@ def chat(req: ChatRequest, request: Request, user: dict | None = Depends(auth.op
     reply = resp.choices[0].message.content
 
     thread_id = req.threadId
-    if user is not None:
-        if thread_id is None:
-            thread_id = db.create_thread(
-                user["id"],
-                req.message.strip()[:60] or _in_language(language, "新对话", "New conversation"),
-            )["id"]
-        db.add_message(user["id"], thread_id, "user", req.message.strip())
-        db.add_message(user["id"], thread_id, "assistant", reply)
-        db.touch_thread(user["id"], thread_id)
+    if thread_id is None:
+        thread_id = db.create_thread(
+            user["id"],
+            req.message.strip()[:60] or _in_language(language, "新对话", "New conversation"),
+        )["id"]
+    db.add_message(user["id"], thread_id, "user", req.message.strip())
+    db.add_message(user["id"], thread_id, "assistant", reply)
+    db.touch_thread(user["id"], thread_id)
     return {"reply": reply, "threadId": thread_id}

@@ -114,22 +114,24 @@ function ThemeToggle() {
 
 function AccountControl() {
   const language = useLanguage();
-  const [email, setEmail] = useState<string | null | undefined>(undefined);
+  const [account, setAccount] = useState<{ email: string; demo: boolean } | null | undefined>(undefined);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null));
+    const read = (user: { email?: string; user_metadata?: Record<string, unknown> } | undefined) =>
+      user ? { email: user.email ?? "", demo: user.user_metadata?.demo_kind === "lantr-private-demo" } : null;
+    supabase.auth.getSession().then(({ data }) => setAccount(read(data.session?.user)));
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      setEmail(session?.user.email ?? null);
+      setAccount(read(session?.user));
     });
     return () => subscription.subscription.unsubscribe();
   }, []);
 
-  if (email === undefined) {
+  if (account === undefined) {
     return <span aria-hidden className="size-8 rounded-full border border-hairline" />;
   }
 
-  if (email === null) {
+  if (account === null) {
     return (
       <Link href="/signin" className="btn-ghost h-8 gap-1.5 px-3 text-xs">
         <svg aria-hidden viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={1.8}>
@@ -150,13 +152,13 @@ function AccountControl() {
         aria-label={pick(language, "账户菜单", "Account menu")}
         className="flex size-8 items-center justify-center rounded-full border border-hairline bg-surface text-xs font-semibold text-ink-2 transition-colors hover:text-ink"
       >
-        {email.slice(0, 1).toUpperCase()}
+        {account.demo ? "D" : account.email.slice(0, 1).toUpperCase()}
       </button>
       {open && (
         <>
           <button className="fixed inset-0 z-40 cursor-default" aria-label={pick(language, "关闭账户菜单", "Close account menu")} onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-10 z-50 w-64 rounded-2xl border border-hairline bg-surface p-2 shadow-2xl">
-            <div className="truncate px-3 py-2 text-xs text-ink-muted">{email}</div>
+            <div className="px-3 py-2 text-xs text-ink-muted">{account.demo ? pick(language, "临时访客工作区", "Private guest workspace") : account.email}</div>
             <Link href="/settings" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 text-sm text-ink-2 hover:bg-wash hover:text-ink">
               {pick(language, "设置", "Settings")}
             </Link>
@@ -165,7 +167,7 @@ function AccountControl() {
               onClick={() => supabase.auth.signOut().then(() => window.location.assign("/"))}
               className="w-full rounded-lg px-3 py-2 text-left text-sm text-ink-2 hover:bg-wash hover:text-ink"
             >
-              {pick(language, "退出登录", "Sign out")}
+              {account.demo ? pick(language, "退出演示", "Leave demo") : pick(language, "退出登录", "Sign out")}
             </button>
           </div>
         </>

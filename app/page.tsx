@@ -21,7 +21,7 @@ const COPY = {
     nav: { features: "Features", how: "How it works", who: "Who it's for" },
     hub: "Student showcase",
     signIn: "Sign in",
-    openApp: "Open the demo",
+    openApp: "Try the demo",
     openDash: "Open your studio",
     badge: "Past Lantr student project · Hosted demo · Export-only",
     h1: "A growth lead that actually knows your story.",
@@ -29,8 +29,8 @@ const COPY = {
     subEm: "then writes like you",
     subRest:
       " — building a versioned brand book and drafting posts that cite your own words. You approve, you export, you press publish.",
-    ctaPrimary: "Explore the live demo",
-    ctaSecondary: "Create a free account",
+    ctaPrimary: "Start a private demo",
+    ctaSecondary: "Sign in",
     trust: [
       "Never invents your stories — every draft cites your material",
       "An editorial engine enforces FTC disclosure & platform rules",
@@ -69,8 +69,8 @@ const COPY = {
     howTitle: "Four steps, one loop.",
     how: [
       {
-        t: "Create an account",
-        b: "You get a blank growth lead. Nothing activates until the interview is done and approved.",
+        t: "Open your private demo",
+        b: "A seeded creator workspace opens instantly—no signup or shared credentials.",
       },
       {
         t: "Teach it your IP",
@@ -109,7 +109,7 @@ const COPY = {
       },
     ],
     ctaTitle: "Your story, shipped on schedule.",
-    ctaBody: "Sign in once and you're signed in across every Lantr demo.",
+    ctaBody: "No signup. Your drafts stay private and clear automatically after 24 hours.",
     footerDisclaimer:
       "A past Lantr student project, hosted by Lantr for demonstration. Drafts are suggestions—you review and publish them yourself.",
     footerLinks: "More from Lantr",
@@ -118,7 +118,7 @@ const COPY = {
     nav: { features: "主要功能", how: "使用流程", who: "作品方向" },
     hub: "往届作品",
     signIn: "登录",
-    openApp: "体验作品",
+    openApp: "互动体验",
     openDash: "打开内容工作台",
     badge: "Lantr 往届学生作品 · 草稿由用户审核 · 不会自动发布",
     h1: "让 AI 帮你写内容，但每个故事都来自你自己。",
@@ -126,8 +126,8 @@ const COPY = {
     subEm: "它只从你的真实材料里找选题、写初稿",
     subRest:
       "。每篇内容都会注明用了哪些材料，最后仍由你修改、审核和发布。",
-    ctaPrimary: "开始体验",
-    ctaSecondary: "注册体验账户",
+    ctaPrimary: "开始专属演示",
+    ctaSecondary: "登录账户",
     trust: [
       "只使用你提供的真实材料",
       "发布前逐条检查内容规则",
@@ -166,8 +166,8 @@ const COPY = {
     howTitle: "先让它了解你，再一起把内容做出来。",
     how: [
       {
-        t: "注册账户",
-        b: "通过简单的引导填写基本信息，完成后再开始使用内容助手。",
+        t: "直接进入专属演示",
+        b: "无需注册，系统会立即准备一套带示例材料、选题和初稿的内容工作区。",
       },
       {
         t: "告诉它你想做怎样的内容",
@@ -206,7 +206,7 @@ const COPY = {
       },
     ],
     ctaTitle: "让 AI 帮忙，但故事和发布权仍然属于你。",
-    ctaBody: "使用同一个体验账户，也可以继续查看另外两件往届学生作品。",
+    ctaBody: "无需注册，所有修改只有你能看到，并会在 24 小时后自动清除。",
     footerDisclaimer:
       "Lantr 往届学生作品，由 Lantr 继续托管。所有初稿都由用户审核并自行发布，产品不会自动发布。",
     footerLinks: "更多学生作品",
@@ -396,7 +396,7 @@ export default function Landing() {
                 >
                   {c.signIn}
                 </Link>
-                <Link href="/today" className="lp-btn h-9 px-4 text-[13px]">
+                <Link href="/demo" className="lp-btn h-9 px-4 text-[13px]">
                   {c.openApp}
                 </Link>
               </>
@@ -428,7 +428,7 @@ export default function Landing() {
             </Reveal>
             <Reveal delay={280}>
               <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row">
-                <Link href="/today" className="lp-btn h-12 px-6 text-[15px]">
+                <Link href="/demo" className="lp-btn h-12 px-6 text-[15px]">
                   {c.ctaPrimary} →
                 </Link>
                 <Link href="/signin" className="lp-btn-ghost h-12 px-6 text-[15px]">
@@ -609,7 +609,7 @@ export default function Landing() {
             </Reveal>
             <Reveal delay={140}>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Link href="/today" className="lp-btn h-12 px-6 text-[15px]">
+                <Link href="/demo" className="lp-btn h-12 px-6 text-[15px]">
                   {c.ctaPrimary} →
                 </Link>
                 <Link

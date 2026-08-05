@@ -1,4 +1,5 @@
 import { TopBar } from "@/components/topbar";
+import { DemoBanner } from "@/components/demo-banner";
 import { DisclaimerBanner } from "@/components/ui";
 import { LanguageBoundary } from "@/components/language-boundary";
 
@@ -12,6 +13,7 @@ export default function AppLayout({
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden">
       <TopBar />
+      <DemoBanner />
       <DisclaimerBanner />
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col overflow-y-auto px-5 py-8 sm:px-6 lg:px-8">
         <LanguageBoundary>{children}</LanguageBoundary>
