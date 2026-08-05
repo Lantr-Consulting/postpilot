@@ -1,9 +1,8 @@
-import { MobileNav, Sidebar } from "@/components/sidebar";
 import { TopBar } from "@/components/topbar";
 import { DisclaimerBanner } from "@/components/ui";
 import { LanguageBoundary } from "@/components/language-boundary";
 
-/* The product shell — sidebar + topbar around every app screen.
+/* The product shell — one compact navigation bar around every app screen.
    The marketing landing at "/" renders outside this group, bare. */
 export default function AppLayout({
   children,
@@ -11,16 +10,12 @@ export default function AppLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="flex h-screen w-full overflow-hidden">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar />
-        <DisclaimerBanner />
-        <MobileNav />
-        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-y-auto px-5 py-8">
-          <LanguageBoundary>{children}</LanguageBoundary>
-        </main>
-      </div>
+    <div className="flex h-screen w-full flex-col overflow-hidden">
+      <TopBar />
+      <DisclaimerBanner />
+      <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col overflow-y-auto px-5 py-8 sm:px-6 lg:px-8">
+        <LanguageBoundary>{children}</LanguageBoundary>
+      </main>
     </div>
   );
 }

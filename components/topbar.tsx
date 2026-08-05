@@ -1,11 +1,49 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CREATOR, TODAY } from "@/lib/mock.localized";
-import { fmtDate } from "@/lib/format";
 import { useLive } from "@/lib/use-live";
 import { LanguageToggle } from "@/components/language-toggle";
 import { pick, useLanguage } from "@/lib/language";
+import { supabase } from "@/lib/supabase";
+
+const PRIMARY_NAV = [
+  { href: "/today", zh: "今日", en: "Today" },
+  { href: "/studio", zh: "内容工作台", en: "Studio" },
+  { href: "/library", zh: "素材库", en: "Library" },
+  { href: "/calendar", zh: "内容日历", en: "Calendar" },
+] as const;
+
+function Wordmark() {
+  const language = useLanguage();
+  return (
+    <Link href="/today" className="flex shrink-0 items-center gap-2.5" aria-label="PostPilot">
+      <span className="flex size-8 items-center justify-center rounded-xl bg-accent shadow-[0_8px_24px_var(--glow)]">
+        <svg
+          aria-hidden
+          viewBox="0 0 32 32"
+          className="size-[18px]"
+          fill="none"
+          stroke="var(--accent-ink)"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M16 4l8 8-6.5 14.5a2 2 0 0 1-3 .9L8.5 22 16 4z" />
+          <path d="M16 4 8.5 22" />
+          <circle cx="14.5" cy="19" r="1.6" fill="var(--accent-ink)" stroke="none" />
+        </svg>
+      </span>
+      <span className="leading-none">
+        <span className="font-display block text-[17px] font-semibold tracking-tight">PostPilot</span>
+        <span className="mt-1 hidden text-[10px] font-medium text-ink-muted xl:block">
+          {pick(language, "把想法写成好内容", "Ideas into publishable content")}
+        </span>
+      </span>
+    </Link>
+  );
+}
 
 // Sun/moon toggle. Dark is the default set; "light" is stored in
 // localStorage and applied pre-paint by the inline script in layout.tsx.
@@ -74,44 +112,127 @@ function ThemeToggle() {
   );
 }
 
+function AccountControl() {
+  const language = useLanguage();
+  const [email, setEmail] = useState<string | null | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null));
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setEmail(session?.user.email ?? null);
+    });
+    return () => subscription.subscription.unsubscribe();
+  }, []);
+
+  if (email === undefined) {
+    return <span aria-hidden className="size-8 rounded-full border border-hairline" />;
+  }
+
+  if (email === null) {
+    return (
+      <Link href="/signin" className="btn-ghost h-8 gap-1.5 px-3 text-xs">
+        <svg aria-hidden viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={1.8}>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M5 21a7 7 0 0 1 14 0" />
+        </svg>
+        <span className="hidden sm:inline">{pick(language, "登录", "Sign in")}</span>
+      </Link>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label={pick(language, "账户菜单", "Account menu")}
+        className="flex size-8 items-center justify-center rounded-full border border-hairline bg-surface text-xs font-semibold text-ink-2 transition-colors hover:text-ink"
+      >
+        {email.slice(0, 1).toUpperCase()}
+      </button>
+      {open && (
+        <>
+          <button className="fixed inset-0 z-40 cursor-default" aria-label={pick(language, "关闭账户菜单", "Close account menu")} onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-10 z-50 w-64 rounded-2xl border border-hairline bg-surface p-2 shadow-2xl">
+            <div className="truncate px-3 py-2 text-xs text-ink-muted">{email}</div>
+            <Link href="/settings" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 text-sm text-ink-2 hover:bg-wash hover:text-ink">
+              {pick(language, "设置", "Settings")}
+            </Link>
+            <button
+              type="button"
+              onClick={() => supabase.auth.signOut().then(() => window.location.assign("/"))}
+              className="w-full rounded-lg px-3 py-2 text-left text-sm text-ink-2 hover:bg-wash hover:text-ink"
+            >
+              {pick(language, "退出登录", "Sign out")}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function TopBar() {
   const { live, checking } = useLive();
   const language = useLanguage();
+  const pathname = usePathname();
   return (
-    <header className="flex items-center justify-between gap-3 border-b border-hairline bg-page px-5 py-3">
-      <div className="flex items-center gap-2 text-sm text-ink-2">
-        <svg
-          aria-hidden
-          viewBox="0 0 24 24"
-          className="size-4 text-ink-muted"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.75}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 19l7-7 3 3-7 7-3-3z" />
-          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-        </svg>
-        <span className="font-medium text-ink">
-          {CREATOR.ipProfile.pillars.length} {pick(language, "个内容方向", "content pillars")} ·{" "}
-          {CREATOR.niche.topics[0]}
-        </span>
-        <span className="text-ink-muted">· {fmtDate(TODAY, language)}</span>
+    <header className="relative z-30 shrink-0 border-b border-hairline bg-page/95 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-5 px-4 sm:px-6 lg:px-8">
+        <Wordmark />
+        <nav className="hidden min-w-0 flex-1 items-center gap-1 md:flex" aria-label={pick(language, "主导航", "Primary navigation")}>
+          {PRIMARY_NAV.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={`rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
+                  active ? "bg-wash-2 text-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
+                }`}
+              >
+                {item[language]}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <span
+            className={`hidden rounded-full px-2.5 py-1 text-[11px] font-medium lg:inline-flex ${
+              live ? "bg-good/10 text-good" : "border border-hairline text-ink-muted"
+            }`}
+          >
+            {checking ? "…" : live ? pick(language, "实时工作区", "Live workspace") : pick(language, "互动演示", "Interactive demo")}
+          </span>
+          <LanguageToggle />
+          <ThemeToggle />
+          <Link
+            href="/settings"
+            aria-label={pick(language, "设置", "Settings")}
+            aria-current={pathname === "/settings" ? "page" : undefined}
+            className={`hidden size-8 items-center justify-center rounded-full border border-hairline sm:flex ${pathname === "/settings" ? "bg-wash-2 text-ink" : "text-ink-2 hover:bg-wash hover:text-ink"}`}
+          >
+            <svg aria-hidden viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 14 1.7 1.7 0 0 0 3.09 13H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9h.09A1.7 1.7 0 0 0 21 10h.09a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1Z" />
+            </svg>
+          </Link>
+          <AccountControl />
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <span
-          className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-            live
-              ? "bg-good/10 text-good"
-              : "border border-hairline text-ink-muted"
-          }`}
-        >
-          {checking ? "…" : live ? pick(language, "实时数据", "Live data") : pick(language, "演示数据", "Demo data")}
-        </span>
-        <LanguageToggle />
-        <ThemeToggle />
-      </div>
+      <nav className="flex gap-1 overflow-x-auto border-t border-hairline px-3 py-2 md:hidden" aria-label={pick(language, "主导航", "Primary navigation")}>
+        {[...PRIMARY_NAV, { href: "/settings", zh: "设置", en: "Settings" } as const].map((item) => {
+          const active = pathname === item.href;
+          return (
+            <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${active ? "bg-wash-2 font-medium text-ink" : "text-ink-2"}`}>
+              {item[language]}
+            </Link>
+          );
+        })}
+      </nav>
     </header>
   );
 }
