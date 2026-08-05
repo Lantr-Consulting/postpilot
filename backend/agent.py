@@ -38,7 +38,7 @@ def _tool_result(items: list[dict]) -> str:
 def _language_rule(language: str) -> str:
     if language == "en":
         return "Write every user-facing string in natural English; keep JSON keys unchanged."
-    return "Write every user-facing string in natural Simplified Chinese; keep JSON keys unchanged."
+    return "Write every user-facing string in idiomatic Simplified Chinese as a native Chinese creator product would; avoid literal English translation patterns, and keep JSON keys unchanged."
 
 
 @tool

@@ -909,7 +909,7 @@ class InterpretRequest(BaseModel):
     text: str
 
 
-INTERPRET_SYSTEM = """You turn a creator's plain-English story — who they are,
+INTERPRET_SYSTEM = """You turn a creator's story — who they are,
 what they want to be known for, how they talk — into PostPilot's Creator IP
 brand book JSON.
 
@@ -931,7 +931,8 @@ Rules:
 - Everything must trace to what they wrote. When unsure, leave it out —
   an empty field beats an invented one.
 - Sharpen their language; do not replace it with generic marketing speak.
-- Write every user-facing string value in natural Simplified Chinese; keep JSON keys unchanged.
+- Follow the per-request language instruction appended below for every
+  user-facing string value; keep JSON keys unchanged.
 """
 
 
@@ -1054,7 +1055,7 @@ Hard rules:
 - Never invent metrics, trend data, or platform statistics.
 - Drafts are suggestions — the creator reviews, edits, and posts everything
   themselves. Keep answers concise and practical; no hype words.
-- Always reply in natural Simplified Chinese, including drafts, questions,
+- Follow the final per-request language instruction for drafts, questions,
   explanations, and summaries. Keep proper names and platform names as written.
 """
 
